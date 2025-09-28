@@ -71,7 +71,7 @@ h2 {
 }
 
 .status-in {
-    background-color: #3f51b5;
+    background-color: #4CAF50; /* 緑色 */
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
@@ -121,7 +121,6 @@ h2 {
     border: none;
 }
 
-/* ▼▼▼ ここにExcel関連ボタンのスタイルを追加 ▼▼▼ */
 #import-excel-button, #download-template-button, #export-excel-button, #bulk-apply-button {
     padding: 8px 12px;
     border-radius: 4px;
@@ -135,7 +134,6 @@ h2 {
 #import-excel-button:hover, #download-template-button:hover, #export-excel-button:hover, #bulk-apply-button:hover {
     background-color: #3f51b5;
 }
-
 
 /* 管理ページの部員一覧リスト */
 #admin-member-list .member {
@@ -345,57 +343,23 @@ h2 {
 
 /* --- スマートフォン表示への対応 --- */
 @media (max-width: 768px) {
-    /* 全体の調整 */
-    body {
-        padding: 10px;
-    }
-    .panel {
-        padding: 15px;
-        min-width: 0; 
-    }
+    body { padding: 10px; }
+    .panel { padding: 15px; min-width: 0; }
     h1 { font-size: 1.8em; }
     h2 { font-size: 1.3em; }
 
-    /* 在室状況・キオスク画面の調整 */
     #current-members {
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
         gap: 12px;
     }
-    #current-members .member {
-        padding: 12px 8px;
-        font-size: 1em;
-    }
+    #current-members .member { padding: 12px 8px; font-size: 1em; }
 
-    /* 管理ページの調整 */
-    #add-member-form {
-        grid-template-columns: 1fr;
-    }
-    #list-controls {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .member-summary {
-        gap: 8px 15px;
-    }
-    
-    .summary-info {
-        flex-basis: 100%;
-        order: 1;
-        min-width: 0;
-    }
-    
-    .summary-status {
-        flex-grow: 1;
-        justify-content: flex-start;
-        order: 2;
-        text-align: left;
-        min-width: 150px;
-    }
-    
-    .summary-actions {
-        order: 3;
-    }
+    #add-member-form { grid-template-columns: 1fr; }
+    #list-controls { flex-direction: column; align-items: stretch; }
+    .member-summary { gap: 8px 15px; }
+    .summary-info { flex-basis: 100%; order: 1; min-width: 0; }
+    .summary-status { flex-grow: 1; justify-content: flex-start; order: 2; text-align: left; min-width: 150px; }
+    .summary-actions { order: 3; }
 }
 
 /* --- Hamburger Menu & Side Nav --- */
@@ -436,270 +400,84 @@ h2 {
     z-index: 1000;
 }
 
-#side-nav.open {
-    transform: translateX(0);
-}
-
-#side-nav ul {
-    list-style: none;
-    padding: 80px 0 20px 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    box-sizing: border-box;
-}
-
-#side-nav li a {
-    display: block;
-    padding: 15px 20px;
-    text-decoration: none;
-    color: #333;
-    font-size: 1.1em;
-}
-
-#side-nav li a:hover {
-    background-color: #f4f4f9;
-}
+#side-nav.open { transform: translateX(0); }
+#side-nav ul { list-style: none; padding: 80px 0 20px 0; margin: 0; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+#side-nav li a { display: block; padding: 15px 20px; text-decoration: none; color: #333; font-size: 1.1em; }
+#side-nav li a:hover { background-color: #f4f4f9; }
 
 /* --- Activity Log List --- */
-#activity-log-list .log-item {
-    padding: 12px 10px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-#activity-log-list .log-item:nth-child(odd) {
-    background-color: #f9f9f9;
-}
-
+#activity-log-list .log-item { padding: 12px 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+#activity-log-list .log-item:nth-child(odd) { background-color: #f9f9f9; }
 #activity-log-list .log-item .log-action-in { color: #3f51b5; font-weight: bold; }
 #activity-log-list .log-item .log-action-out { color: #a71818; font-weight: bold; }
 #activity-log-list .log-item .log-time { font-size: 0.9em; color: #666; white-space: nowrap; }
 
-.nav-bottom-links {
-    margin-top: auto;
-    border-top: 1px solid #eee;
-    padding-top: 10px;
-}
-
-#logout-link {
-    color: #e53935;
-    font-weight: bold;
-}
-
-#logout-link:hover {
-    color: #c62828;
-    background-color: #fcebee;
-}
+.nav-bottom-links { margin-top: auto; border-top: 1px solid #eee; padding-top: 10px; }
+#logout-link { color: #e53935; font-weight: bold; }
+#logout-link:hover { color: #c62828; background-color: #fcebee; }
 
 /* --- 設定フォームスタイル --- */
-.settings-form .form-group {
-    margin-bottom: 20px;
-}
-.settings-form label, .settings-form h3 {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: bold;
-    color: #333;
-}
+.settings-form .form-group { margin-bottom: 20px; }
+.settings-form label, .settings-form h3 { display: block; margin-bottom: 8px; font-weight: bold; color: #333; }
 .settings-form input[type="text"],
 .settings-form input[type="password"],
-.settings-form input[type="email"] {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1em;
-}
+.settings-form input[type="email"],
 .settings-form input[type="number"],
-.settings-form select {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-}
-
-.settings-form button, #manual-sync-button, #update-api-key-button {
-    padding: 10px 15px;
-    border-radius: 4px;
-    border: none;
-    font-size: 1em;
-    background-color: #5c6bc0;
-    color: white;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-.settings-form button:hover, #manual-sync-button:hover, #update-api-key-button:hover {
-    background-color: #3f51b5;
-}
-.settings-form .form-group p {
-    font-size: 0.9em;
-    color: #666;
-    margin-top: 0;
-}
+.settings-form select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+   
+.settings-form button, #manual-sync-button, #update-api-key-button { padding: 10px 15px; border-radius: 4px; border: none; font-size: 1em; background-color: #5c6bc0; color: white; cursor: pointer; transition: background-color 0.2s; }
+.settings-form button:hover, #manual-sync-button:hover, #update-api-key-button:hover { background-color: #3f51b5; }
+.settings-form .form-group p { font-size: 0.9em; color: #666; margin-top: 0; }
 
 /* --- トグルスイッチ --- */
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 60px;
-    height: 34px;
-    vertical-align: middle;
-}
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: .4s;
-    border-radius: 34px;
-}
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 26px;
-    width: 26px;
-    /* ▼▼▼ 位置を修正 ▼▼▼ */
-    top: 0px; 
-    left: 4px;
-    background-color: white;
-    transition: .4s;
-    border-radius: 50%;
-}
-input:checked + .slider {
-    background-color: #3f51b5;
-}
-input:checked + .slider:before {
-    transform: translateX(26px);
-}
+.toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; vertical-align: middle; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+.slider:before { position: absolute; content: ""; height: 26px; width: 26px; top: 0px; left: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: #3f51b5; }
+input:checked + .slider:before { transform: translateX(26px); }
 
 /* --- ログイン画面のUI改善 --- */
-#login-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 80vh; /* 画面の高さに応じて中央に配置 */
-}
-
-#login-form {
-    text-align: center;
-}
-
-#login-form h2 {
-    margin-bottom: 25px;
-}
-
-#login-form input {
-    display: block;
-    width: 100%;
-    padding: 12px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1em;
-}
-
-#login-form button {
-    width: 100%;
-    padding: 12px;
-    border-radius: 4px;
-    border: none;
-    font-size: 1.1em;
-    font-weight: bold;
-    background-color: #5c6bc0;
-    color: white;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-#login-form button:hover {
-    background-color: #3f51b5;
-}
+#login-container { display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+#login-form { text-align: center; }
+#login-form h2 { margin-bottom: 25px; }
+#login-form input { display: block; width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+#login-form button { width: 100%; padding: 12px; border-radius: 4px; border: none; font-size: 1.1em; font-weight: bold; background-color: #5c6bc0; color: white; cursor: pointer; transition: background-color 0.2s; }
+#login-form button:hover { background-color: #3f51b5; }
 
 /* --- モーダルウィンドウのスタイル --- */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 2000; /* サイドナビより手前に表示 */
-}
-
-.modal-content {
-    width: 90%;
-    max-width: 500px;
-}
-
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
-}
-
-/* 出力項目のチェックボックスをグリッド表示にする */
-.checkbox-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 10px;
-    margin-top: 10px;
-}
-
-.checkbox-grid label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; }
+.modal-content.panel { width: 90%; max-width: 500px; } /* panelクラスと共存させる */
+.modal-content h3 { color: #444; border-bottom: 2px solid #5c6bc0; padding-bottom: 10px; margin-top: 0; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; }
+.checkbox-grid label { display: flex; align-items: center; gap: 5px; }
 
 /* --- ステータス文字の色 --- */
-.status-text.status-expired {
-    color: #e53935; /* 赤色 */
-    font-weight: bold;
-}
-.status-text.status-in-text {
-    color: #4CAF50; /* 緑色 */
-}
+.status-text.status-expired { color: #e53935; font-weight: bold; }
+.status-text.status-in-text { color: #4CAF50; }
 
 /* --- 絞り込みフィルターのスタイル --- */
-.filter-grid {
-    display: flex; /* 横一列に */
-    flex-wrap: nowrap; /* 折り返さない */
-    overflow-x: auto; /* はみ出した場合に横スクロール */
-    gap: 10px;
-    margin-bottom: 15px;
-    padding: 10px;
-    background-color: #f9f9f9;
-    border-radius: 6px;
-    align-items: center; 
-    padding-bottom: 20px; /* スクロールバーのための余白 */
-}
-.filter-label {
-    font-weight: bold;
-    white-space: nowrap;
-    margin-right: 5px;
-}
-.filter-grid select {
-    padding: 8px;
-    border-radius: 4px;
-    border: 1px solid #ccc;
-    font-size: 14px;
-    min-width: 120px; /* 最小幅を確保 */
+.filter-grid { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 10px; margin-bottom: 15px; padding: 10px; background-color: #f9f9f9; border-radius: 6px; align-items: center; padding-bottom: 20px; }
+.filter-label { font-weight: bold; white-space: nowrap; margin-right: 5px; }
+.filter-grid select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; min-width: 120px; }
+
+/* --- ヘルプページのスタイル --- */
+#help-search-input { width: 100%; padding: 10px; font-size: 1em; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 20px; }
+.help-topic { margin-bottom: 25px; }
+.help-topic h3 { border-left: 4px solid #5c6bc0; padding-left: 10px; }
+.help-topic ul { list-style-position: inside; padding-left: 10px; }
+.help-topic li { margin-bottom: 8px; }
+
+/* --- 外部リンクアイコンのスタイル --- */
+.external-link::after {
+    content: '';
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-left: 0.4em;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'%3e%3c/path%3e%3cpolyline points='15 3 21 3 21 9'%3e%3c/polyline%3e%3cline x1='10' y1='14' x2='21' y2='3'%3e%3c/line%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-size: contain;
+    vertical-align: middle;
 }

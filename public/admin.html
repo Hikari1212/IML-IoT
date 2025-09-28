@@ -25,13 +25,14 @@
                 <li><a href="#" id="nav-link-logs">入退室ログ</a></li>
                 <li><a href="#" id="nav-link-analytics">分析</a></li>
                 <li><a href="#" id="nav-link-discord">Discord連携</a></li>
+                <li><a href="#" id="nav-link-help">ヘルプ</a></li>
                 <li><a href="#" id="nav-link-settings">設定</a></li>
             </div>
             <div class="nav-bottom-links">
-                <li><a href="/index.html" target="_blank" rel="noopener noreferrer">サークル在室状況</a></li>
-                <li><a href="/kiosk.html" target="_blank" rel="noopener noreferrer">キオスク画面</a></li>
-                <li><a href="/register.html" target="_blank" rel="noopener noreferrer">部員名簿登録(一般)</a></li>
-                <li><a href="https://scrapbox.io/imedia-lab/%E9%83%A8%E5%AE%A4%E5%9C%A8%E5%AE%A4%E7%AE%A1%E7%90%86%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0" target="_blank" rel="noopener noreferrer">管理用資料</a></li>
+                <li><a href="/index.html" target="_blank" rel="noopener noreferrer" class="external-link">サークル在室状況</a></li>
+                <li><a href="/kiosk.html" target="_blank" rel="noopener noreferrer" class="external-link">キオスク画面</a></li>
+                <li><a href="/register.html" target="_blank" rel="noopener noreferrer" class="external-link">部員名簿登録(一般)</a></li>
+                <li><a href="https://scrapbox.io/imedia-lab/%E9%83%A8%E5%AE%A4%E5%9C%A8%E5%AE%A4%E7%AE%A1%E7%90%86%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0" target="_blank" rel="noopener noreferrer" class="external-link">管理用資料</a></li>
                 <li><a href="#" id="logout-link">ログアウト</a></li>
             </div>
         </ul>
@@ -268,6 +269,67 @@
                     <p style="font-size: 0.9em; color: #666; margin-top:0;">現在の部員名簿の状態を、全メンバーのDiscordロールに強制的に反映させます。</p>
                     <button type="button" id="manual-sync-button">今すぐ手動で同期する</button>
                 </div>
+            </div>
+            
+            <div id="help-panel" class="panel content-panel" style="display: none;">
+                <h2>ヘルプ / 使い方</h2>
+                <input type="search" id="help-search-input" placeholder="キーワードでヘルプ項目を検索...">
+                
+                <div class="help-topic">
+                    <h3>部員管理</h3>
+                    <p>部員の追加、情報編集、削除など、名簿に関する全ての操作を行います。</p>
+                    <ul>
+                        <li><strong>部員の追加:</strong> ページ上部のフォームに必要な情報を入力し、「部員を追加」ボタンを押します。キーボードの空きキーが自動的に割り当てられます。</li>
+                        <li><strong>情報の編集:</strong> 一覧の各部員の右側にある「編集」ボタンを押すと、入力フォームが表示されます。変更後に「保存」を押してください。</li>
+                        <li><strong>削除:</strong> 「編集」ボタンの隣にある「削除」ボタンから部員を削除できます。この操作は取り消せません。</li>
+                        <li><strong>詳細情報の確認:</strong> 部員名の欄をクリックすると、学籍番号やDiscord IDなどの詳細情報が表示されます。</li>
+                        <li><strong>絞り込みとソート:</strong> 一覧の上部にある検索窓やドロップダウンメニューで、表示する部員を絞り込んだり、並べ替えたりできます。</li>
+                        <li><strong>一括操作:</strong> 各部員の左側にあるチェックボックスを選択すると、画面上部に「一括操作」パネルが表示されます。複数の部員の有効期限を一度に更新したり、まとめて削除したりできます。</li>
+                        <li><strong>Excelインポート:</strong> 指定のテンプレートを使って、複数の部員を一度に登録できます。登録された部員は初期状態では「失効」になっているため、管理者が有効期限を設定する必要があります。</li>
+                        <li><strong>Excelエクスポート:</strong> 現在の名簿情報をExcelファイルとしてダウンロードします。出力する項目や、失効部員を含めるかどうかを選択できます。</li>
+                    </ul>
+                </div>
+                <div class="help-topic">
+                    <h3>管理者管理</h3>
+                    <p>この管理ページにログインできる管理者アカウントを管理します。</p>
+                    <ul>
+                        <li><strong>管理者の追加:</strong> 新しい管理者のメールアドレスと初期パスワードを設定して登録します。登録された管理者は、次回からその情報でログインできます。</li>
+                        <li><strong>管理者の削除:</strong> 既存の管理者を削除します。自分自身を削除することはできません。</li>
+                    </ul>
+                </div>
+                <div class="help-topic">
+                    <h3>入退室ログ</h3>
+                    <p>キオスク端末での入退室操作の履歴を閲覧できます。</p>
+                    <ul>
+                        <li><strong>期間・件数指定:</strong> 表示するログの期間（直近1ヶ月、1年など）や、1ページに表示する件数を変更できます。</li>
+                        <li><strong>ページ移動:</strong> ログが多い場合、リスト下部の「前へ」「次へ」ボタンでページを移動できます。</li>
+                    </ul>
+                </div>
+                <div class="help-topic">
+                    <h3>分析</h3>
+                    <p>直近1ヶ月のログデータを基に、部室の利用状況をグラフで確認できます。</p>
+                    <ul>
+                        <li><strong>部室滞在時間ランキング:</strong> 部員ごとの合計滞在時間をグラフで表示します。</li>
+                        <li><strong>部室入室回数ランキング:</strong> 部員ごとの合計入室回数をグラフで表示します。</li>
+                    </ul>
+                </div>
+                <div class="help-topic">
+                    <h3>Discord連携</h3>
+                    <p>部員名簿とDiscordサーバーのロール（役割）を自動で連携させるための設定です。</p>
+                    <ul>
+                        <li><strong>ロール自動付与:</strong> 名簿で有効な部員に特定のロール（例: 「部員」ロール）を付与したり、在室中のメンバーに別のロール（例: 「部内」ロール）を付与したりできます。</li>
+                        <li><strong>各種IDとトークン:</strong> 設定には、Discord BotのトークンやサーバーID、ロールIDなど、専門的な情報が必要です。詳しくはサーバー管理者にご確認ください。</li>
+                        <li><strong>手動同期:</strong> 「今すぐ手動で同期する」ボタンを押すと、現在の名簿の状態がDiscordサーバーの全メンバーに強制的に反映されます。</li>
+                    </ul>
+                </div>
+                <div class="help-topic">
+                    <h3>設定</h3>
+                    <p>システムに関するその他の設定を行います。</p>
+                    <ul>
+                        <li><strong>部員名簿APIキー:</strong> 外部のプログラムから部員名簿の情報を安全に取得するためのAPIキーです。新しいキーを生成・更新できます。キーを更新した場合は、利用しているすべてのプログラムのキーを更新する必要があります。</li>
+                    </ul>
+                </div>
+
             </div>
 
             <div id="settings-panel" class="panel content-panel" style="display: none;">

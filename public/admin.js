@@ -41,8 +41,10 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const sideNav = document.getElementById('side-nav');
     const navLinkMembers = document.getElementById('nav-link-members');
     const navLinkLogs = document.getElementById('nav-link-logs');
+    const navLinkHelp = document.getElementById('nav-link-help'); // ヘルプリンク
     const memberManagementPanel = document.getElementById('member-management-panel');
     const activityLogPanel = document.getElementById('activity-log-panel');
+    const helpPanel = document.getElementById('help-panel'); // ヘルプパネル
 
     // --- 分析ページ関連 ---
     const navLinkAnalytics = document.getElementById('nav-link-analytics');
@@ -65,6 +67,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const searchInput = document.getElementById('search-input');
     const sortSelect = document.getElementById('sort-select');
     const filterControls = document.getElementById('filter-controls');
+    const helpSearchInput = document.getElementById('help-search-input');
     let allMembers = [];
 
     // --- 管理者管理機能 ---
@@ -148,6 +151,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     navLinkLogs.addEventListener('click', (e) => { e.preventDefault(); showPanel(activityLogPanel); });
     navLinkAnalytics.addEventListener('click', (e) => { e.preventDefault(); showPanel(analyticsPanel); });
     navLinkDiscord.addEventListener('click', (e) => { e.preventDefault(); showPanel(discordIntegrationPanel); });
+    navLinkHelp.addEventListener('click', (e) => { e.preventDefault(); showPanel(helpPanel); });
     navLinkSettings.addEventListener('click', (e) => { e.preventDefault(); showPanel(settingsPanel); });
 
     async function loadSettings() {
@@ -599,6 +603,20 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     searchInput.addEventListener('input', renderMemberList);
     sortSelect.addEventListener('change', renderMemberList);
     filterControls.addEventListener('change', renderMemberList);
+
+    // ▼▼▼ ヘルプページの検索機能を追加 ▼▼▼
+    helpSearchInput.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const topics = document.querySelectorAll('#help-panel .help-topic');
+        topics.forEach(topic => {
+            const topicText = topic.textContent.toLowerCase();
+            if (topicText.includes(searchTerm)) {
+                topic.style.display = 'block';
+            } else {
+                topic.style.display = 'none';
+            }
+        });
+    });
 
     addMemberForm.addEventListener('submit', async (e) => {
         e.preventDefault();
