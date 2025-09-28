@@ -5,7 +5,7 @@ import {
     deleteDoc, getDocs, writeBatch, Timestamp, orderBy, limit, startAfter
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
-export function initAdminPage(auth, db, functions, XLSX) {
+export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const membersCollection = collection(db, 'members');
 
     // --- DOM要素 ---
@@ -24,7 +24,9 @@ export function initAdminPage(auth, db, functions, XLSX) {
     const bulkActionPanel = document.getElementById('bulk-action-panel');
     const selectionCount = document.getElementById('selection-count');
     const bulkActionSelect = document.getElementById('bulk-action-select');
+    const bulkExpiryControls = document.getElementById('bulk-expiry-controls');
     const bulkExpirySelect = document.getElementById('bulk-expiry-select');
+    const bulkCustomExpiryInput = document.getElementById('bulk-custom-expiry');
     const bulkApplyButton = document.getElementById('bulk-apply-button');
 
     // --- ハンバーガーメニューとパネルのDOM要素 ---
@@ -35,7 +37,14 @@ export function initAdminPage(auth, db, functions, XLSX) {
     const memberManagementPanel = document.getElementById('member-management-panel');
     const activityLogPanel = document.getElementById('activity-log-panel');
 
-    // --- 入退室ログ関連のDOM要素と状態変数 ---
+    // --- 分析ページ関連 ---
+    const navLinkAnalytics = document.getElementById('nav-link-analytics');
+    const analyticsPanel = document.getElementById('analytics-panel');
+    let stayDurationChart = null;
+    let entryCountChart = null;
+    let analyticsDataLoaded = false;
+
+    // --- 入退室ログ関連 ---
     const activityLogListDiv = document.getElementById('activity-log-list');
     const logPeriodSelect = document.getElementById('log-period-select');
     const logPageSizeSelect = document.getElementById('log-page-size-select');
@@ -43,41 +52,33 @@ export function initAdminPage(auth, db, functions, XLSX) {
     const logNextButton = document.getElementById('log-next-button');
     const logPageInfo = document.getElementById('log-page-info');
     let logCurrentPage = 1;
-    let pageStartMarkers = [null]; // 各ページの開始点(Firestore Document)を格納
+    let pageStartMarkers = [null];
 
-    // --- 検索・ソート機能のDOM要素 ---
+    // --- 検索・ソート機能 ---
     const searchInput = document.getElementById('search-input');
     const sortSelect = document.getElementById('sort-select');
     let allMembers = [];
 
-    // --- 管理者管理機能のDOM要素 ---
+    // --- 管理者管理機能 ---
     const navLinkAdmins = document.getElementById('nav-link-admins');
     const adminManagementPanel = document.getElementById('admin-management-panel');
     const adminListDiv = document.getElementById('admin-list');
     const addAdminForm = document.getElementById('add-admin-form');
     const addAdminButton = document.getElementById('add-admin-button');
 
+    // --- Discord連携 ---
     const navLinkDiscord = document.getElementById('nav-link-discord');
     const discordIntegrationPanel = document.getElementById('discord-integration-panel');
     const discordSettingsForm = document.getElementById('discord-settings-form');
     const manualSyncButton = document.getElementById('manual-sync-button');
 
+    // --- その他設定 ---
     const navLinkSettings = document.getElementById('nav-link-settings');
     const settingsPanel = document.getElementById('settings-panel');
     const apiKeyDisplay = document.getElementById('api-key-display');
     const updateApiKeyButton = document.getElementById('update-api-key-button');
-
     let isDiscordFormDirty = false;
 
-    function navigateWithDirtyCheck(panelToShow) {
-        if (isDiscordFormDirty) {
-            if (!confirm("未保存の変更があります。ページを移動しますか？")) {
-                return; // 移動をキャンセル
-            }
-        }
-        showPanel(panelToShow);
-        isDiscordFormDirty = false; // 他のページに移動したらフラグをリセット
-    }
 
     // --- 認証処理 ---
     onAuthStateChanged(auth, user => {
@@ -86,8 +87,8 @@ export function initAdminPage(auth, db, functions, XLSX) {
             mainContent.style.display = 'block';
             hamburgerButton.style.display = 'flex';
             loadAdminMemberList();
-            setupLogEventListeners(); // ログ画面のイベントリスナーを設定
-            loadActivityLogs();       // ログを初期表示
+            setupLogEventListeners();
+            loadActivityLogs();
             loadAdminList();
             loadSettings();
         } else {
@@ -116,23 +117,23 @@ export function initAdminPage(auth, db, functions, XLSX) {
     });
 
     function showPanel(panelToShow) {
-        if (panelToShow === discordIntegrationPanel || panelToShow === settingsPanel) {
-            loadSettings();
-        }
+        if (isDiscordFormDirty && !confirm("未保存の変更があります。ページを移動しますか？")) return;
+        isDiscordFormDirty = false;
+
+        if ((panelToShow === discordIntegrationPanel || panelToShow === settingsPanel)) loadSettings();
+        if (panelToShow === analyticsPanel && !analyticsDataLoaded) loadAnalyticsData();
+
         document.querySelectorAll('.content-panel').forEach(panel => panel.style.display = 'none');
         panelToShow.style.display = 'block';
         sideNav.classList.remove('open');
     }
 
-    navLinkMembers.addEventListener('click', (e) => { e.preventDefault(); navigateWithDirtyCheck(memberManagementPanel); });
-    navLinkAdmins.addEventListener('click', (e) => { e.preventDefault(); navigateWithDirtyCheck(adminManagementPanel); });
-    navLinkLogs.addEventListener('click', (e) => { e.preventDefault(); navigateWithDirtyCheck(activityLogPanel); });
-    navLinkSettings.addEventListener('click', (e) => { e.preventDefault(); navigateWithDirtyCheck(settingsPanel); });
-    navLinkDiscord.addEventListener('click', (e) => {
-        e.preventDefault();
-        showPanel(discordIntegrationPanel);
-        isDiscordFormDirty = false;
-    });
+    navLinkMembers.addEventListener('click', (e) => { e.preventDefault(); showPanel(memberManagementPanel); });
+    navLinkAdmins.addEventListener('click', (e) => { e.preventDefault(); showPanel(adminManagementPanel); });
+    navLinkLogs.addEventListener('click', (e) => { e.preventDefault(); showPanel(activityLogPanel); });
+    navLinkAnalytics.addEventListener('click', (e) => { e.preventDefault(); showPanel(analyticsPanel); });
+    navLinkDiscord.addEventListener('click', (e) => { e.preventDefault(); showPanel(discordIntegrationPanel); });
+    navLinkSettings.addEventListener('click', (e) => { e.preventDefault(); showPanel(settingsPanel); });
 
     async function loadSettings() {
         try {
@@ -158,6 +159,104 @@ export function initAdminPage(auth, db, functions, XLSX) {
             alert(`設定の読み込みに失敗しました: ${error.message}`);
         }
     }
+
+    // --- 分析ページ機能 ---
+    async function loadAnalyticsData() {
+        analyticsDataLoaded = true;
+        const durationChartContainer = document.getElementById('stay-duration-chart').parentElement;
+        const entryChartContainer = document.getElementById('entry-count-chart').parentElement;
+        durationChartContainer.innerHTML = '<p>データを集計中です...</p><canvas id="stay-duration-chart"></canvas>';
+        entryChartContainer.innerHTML = '<p>データを集計中です...</p><canvas id="entry-count-chart"></canvas>';
+
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        const q = query(
+            collection(db, 'activity_logs'),
+            where('timestamp', '>=', Timestamp.fromDate(oneMonthAgo)),
+            orderBy('timestamp', 'asc')
+        );
+
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            durationChartContainer.innerHTML = '<p>直近1ヶ月のログデータがありません。</p>';
+            entryChartContainer.innerHTML = '<p>直近1ヶ月のログデータがありません。</p>';
+            return;
+        }
+
+        const memberStayDurations = {};
+        const memberEntryCounts = {};
+        const memberLastInTime = {};
+
+        snapshot.forEach(doc => {
+            const log = doc.data();
+            if (!log.memberName || !log.timestamp) return;
+
+            if (log.action === 'in') {
+                memberLastInTime[log.memberName] = log.timestamp.toDate();
+                memberEntryCounts[log.memberName] = (memberEntryCounts[log.memberName] || 0) + 1;
+            } else if (log.action === 'out' && memberLastInTime[log.memberName]) {
+                const duration = log.timestamp.toDate() - memberLastInTime[log.memberName];
+                memberStayDurations[log.memberName] = (memberStayDurations[log.memberName] || 0) + duration;
+                delete memberLastInTime[log.memberName];
+            }
+        });
+
+        const sortedDurations = Object.entries(memberStayDurations)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+        const sortedEntries = Object.entries(memberEntryCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+        stayDurationChart = renderChart(
+            'stay-duration-chart',
+            stayDurationChart,
+            '滞在時間 (時間)',
+            sortedDurations.map(item => item[0]),
+            sortedDurations.map(item => (item[1] / (1000 * 60 * 60)).toFixed(2))
+        );
+        entryCountChart = renderChart(
+            'entry-count-chart',
+            entryCountChart,
+            '入室回数',
+            sortedEntries.map(item => item[0]),
+            sortedEntries.map(item => item[1])
+        );
+    }
+
+    function renderChart(canvasId, chartInstance, label, labels, data) {
+        const container = document.getElementById(canvasId).parentElement;
+        container.querySelector('p')?.remove();
+        if (chartInstance) chartInstance.destroy();
+
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        return new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: label,
+                    data: data,
+                    backgroundColor: 'rgba(63, 81, 181, 0.5)',
+                    borderColor: 'rgba(63, 81, 181, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                scales: { x: { beginAtZero: true } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // --- 部員登録フォームの有効期限 ---
+    const newMemberExpirySelect = document.getElementById('new-member-expiry');
+    const newMemberCustomExpiryInput = document.getElementById('new-member-custom-expiry');
+    newMemberExpirySelect.addEventListener('change', () => {
+        newMemberCustomExpiryInput.style.display = newMemberExpirySelect.value === 'custom' ? 'block' : 'none';
+    });
 
     // --- Discord連携ページ ---
     discordSettingsForm.addEventListener('input', () => {
@@ -342,6 +441,7 @@ export function initAdminPage(auth, db, functions, XLSX) {
                 default: return 0;
             }
         });
+
         adminMemberListDiv.innerHTML = `<div class="member-header"><input type="checkbox" id="select-all-checkbox"><span>メンバー情報</span></div>`;
         if (filteredMembers.length === 0) {
             adminMemberListDiv.innerHTML += '<p style="text-align: center; padding: 20px;">該当する部員はいません。</p>';
@@ -390,7 +490,14 @@ export function initAdminPage(auth, db, functions, XLSX) {
                             <select id="edit-grade-${member.id}"><option value="B1" ${member.grade === 'B1' ? 'selected' : ''}>学部1年</option><option value="B2" ${member.grade === 'B2' ? 'selected' : ''}>学部2年</option><option value="B3" ${member.grade === 'B3' ? 'selected' : ''}>学部3年</option><option value="B4" ${member.grade === 'B4' ? 'selected' : ''}>学部4年</option><option value="M1" ${member.grade === 'M1' ? 'selected' : ''}>修士1年</option><option value="M2" ${member.grade === 'M2' ? 'selected' : ''}>修士2年</option></select>
                             <select id="edit-category-${member.id}"><option value="Ⅰ類" ${member.category === 'Ⅰ類' ? 'selected' : ''}>Ⅰ類</option><option value="Ⅱ類" ${member.category === 'Ⅱ類' ? 'selected' : ''}>Ⅱ類</option><option value="Ⅲ類" ${member.category === 'Ⅲ類' ? 'selected' : ''}>Ⅲ類</option></select>
                             <input type="text" id="edit-project-${member.id}" value="${member.project || ''}" placeholder="プロジェクト">
-                            <select id="edit-expiry-${member.id}"><option value="">有効期限を変更しない</option><option value="this-october">今年の10月末</option><option value="next-april">来年の4月末</option><option value="expire-now">失効させる</option></select>
+                            <select id="edit-expiry-${member.id}">
+                                <option value="">有効期限を変更しない</option>
+                                <option value="this-october">今年の10月末</option>
+                                <option value="next-april">来年の4月末</option>
+                                <option value="custom">年月日を指定</option>
+                                <option value="expire-now">失効させる</option>
+                            </select>
+                            <input type="date" id="edit-custom-expiry-${member.id}" style="display: none;">
                         </div>
                         <div class="edit-controls" style="text-align: right; margin-top: 10px;">
                             <button class="save-button" data-id="${member.id}">保存</button>
@@ -412,15 +519,41 @@ export function initAdminPage(auth, db, functions, XLSX) {
         const studentIdInput = document.getElementById('new-member-studentid');
         const nameCheckQuery = query(membersCollection, where('name', '==', nameInput.value));
         const nameCheck = await getDocs(nameCheckQuery);
-        if (!nameCheck.empty) { alert('エラー: 同じ名前の部員が既に登録されています。'); return; }
+        if (!nameCheck.empty) {
+            alert('エラー: 同じ名前の部員が既に登録されています。');
+            return;
+        }
         const studentIdCheckQuery = query(membersCollection, where('studentId', '==', studentIdInput.value));
         const studentIdCheck = await getDocs(studentIdCheckQuery);
-        if (!studentIdCheck.empty) { alert('エラー: 同じ学籍番号の部員が既に登録されています。'); return; }
+        if (!studentIdCheck.empty) {
+            alert('エラー: 同じ学籍番号の部員が既に登録されています。');
+            return;
+        }
         const assignedKey = await findNextAvailableKey();
-        if (!assignedKey) { alert('エラー: 割り当て可能なキーがありません。'); return; }
+        if (!assignedKey) {
+            alert('エラー: 割り当て可能なキーがありません。');
+            return;
+        }
+
         const expiryChoice = document.getElementById('new-member-expiry').value;
-        const expiryDate = getExpiryDate(expiryChoice);
-        if (!expiryDate) { alert('有効期限を選択してください。'); return; }
+        const customExpiryInput = document.getElementById('new-member-custom-expiry');
+        let expiryDate;
+
+        if (expiryChoice === 'custom') {
+            if (!customExpiryInput.value) {
+                alert('有効期限の年月日を指定してください。');
+                return;
+            }
+            expiryDate = new Date(customExpiryInput.value);
+        } else {
+            expiryDate = getPresetExpiryDate(expiryChoice);
+        }
+
+        if (!expiryDate) {
+            alert('有効期限を選択してください。');
+            return;
+        }
+
         await addDoc(membersCollection, {
             name: nameInput.value,
             furigana: document.getElementById('new-member-furigana').value,
@@ -439,19 +572,24 @@ export function initAdminPage(auth, db, functions, XLSX) {
             createdAt: serverTimestamp(),
             lastUpdated: serverTimestamp()
         });
+
         addMemberForm.reset();
+        customExpiryInput.style.display = 'none';
         alert(`${nameInput.value} さんを追加しました (キー: ${assignedKey})`);
     });
 
     document.addEventListener('click', async (e) => {
         const target = e.target;
         if (target.matches('.member-checkbox, #select-all-checkbox')) return;
+
         const memberItem = target.closest('.member');
         if (!memberItem || !memberItem.id.startsWith('member-item-')) return;
+
         const id = memberItem.id.replace('member-item-', '');
         const summaryView = memberItem.querySelector('.member-summary');
         const detailsView = memberItem.querySelector('.member-details');
         const editView = memberItem.querySelector('.edit-view');
+
         if (target.classList.contains('edit-button')) {
             summaryView.style.display = 'none';
             detailsView.style.display = 'none';
@@ -459,12 +597,14 @@ export function initAdminPage(auth, db, functions, XLSX) {
             memberItem.classList.remove('is-open');
             return;
         }
+
         if (target.classList.contains('cancel-button')) {
             summaryView.style.display = 'flex';
             editView.style.display = 'none';
             detailsView.style.removeProperty('display');
             return;
         }
+
         if (target.classList.contains('save-button')) {
             const memberDocRef = doc(db, 'members', id);
             const updatedData = {
@@ -480,13 +620,22 @@ export function initAdminPage(auth, db, functions, XLSX) {
                 project: document.getElementById(`edit-project-${id}`).value,
                 lastUpdated: serverTimestamp()
             };
+
             const expiryChoice = document.getElementById(`edit-expiry-${id}`).value;
             if (expiryChoice) {
                 if (expiryChoice === 'expire-now') {
                     updatedData.isExpired = true;
                     updatedData.expiryDate = null;
+                } else if (expiryChoice === 'custom') {
+                    const customDateVal = document.getElementById(`edit-custom-expiry-${id}`).value;
+                    if (!customDateVal) {
+                        alert('有効期限の年月日を指定してください。');
+                        return;
+                    }
+                    updatedData.expiryDate = Timestamp.fromDate(new Date(customDateVal));
+                    updatedData.isExpired = false;
                 } else {
-                    const newExpiryDate = getExpiryDate(expiryChoice);
+                    const newExpiryDate = getPresetExpiryDate(expiryChoice);
                     if (newExpiryDate) {
                         updatedData.expiryDate = Timestamp.fromDate(newExpiryDate);
                         updatedData.isExpired = false;
@@ -497,6 +646,7 @@ export function initAdminPage(auth, db, functions, XLSX) {
             alert('メンバー情報を更新しました。');
             return;
         }
+
         if (target.classList.contains('delete-button')) {
             if (confirm('本当にこの部員を削除しますか？')) {
                 await deleteDoc(doc(db, 'members', id));
@@ -507,14 +657,22 @@ export function initAdminPage(auth, db, functions, XLSX) {
         memberItem.classList.toggle('is-open');
     });
 
-    function getExpiryDate(choice) {
+    adminMemberListDiv.addEventListener('change', (e) => {
+        if (e.target.matches('select[id^="edit-expiry-"]')) {
+            const editView = e.target.closest('.edit-view');
+            const customInput = editView.querySelector('input[type="date"]');
+            if (customInput) {
+                customInput.style.display = e.target.value === 'custom' ? 'block' : 'none';
+            }
+        }
+    });
+
+    function getPresetExpiryDate(choice) {
         const now = new Date();
         let year = now.getFullYear();
-        let month, day;
-        if (choice === 'this-october') { month = 9; day = 31; }
-        else if (choice === 'next-april') { year += 1; month = 3; day = 30; }
-        else { return null; }
-        return new Date(year, month, day, 23, 59, 59);
+        if (choice === 'this-october') return new Date(year, 9, 31, 23, 59, 59);
+        if (choice === 'next-april') return new Date(year + 1, 3, 30, 23, 59, 59);
+        return null;
     }
 
     async function findNextAvailableKey(extraUsedKeys = new Set()) {
@@ -554,14 +712,23 @@ export function initAdminPage(auth, db, functions, XLSX) {
     });
 
     bulkActionSelect.addEventListener('change', () => {
-        bulkExpirySelect.style.display = (bulkActionSelect.value === 'update-expiry') ? 'inline-block' : 'none';
+        bulkExpiryControls.style.display = bulkActionSelect.value === 'update-expiry' ? 'inline-flex' : 'none';
+    });
+    bulkExpirySelect.addEventListener('change', () => {
+        bulkCustomExpiryInput.style.display = bulkExpirySelect.value === 'custom' ? 'inline-block' : 'none';
     });
 
     bulkApplyButton.addEventListener('click', async () => {
         const selectedIds = Array.from(document.querySelectorAll('.member-checkbox:checked')).map(cb => cb.dataset.id);
         const action = bulkActionSelect.value;
-        if (selectedIds.length === 0) { alert('操作対象の部員が選択されていません。'); return; }
-        if (!action) { alert('一括操作を選択してください。'); return; }
+        if (selectedIds.length === 0) {
+            alert('操作対象の部員が選択されていません。');
+            return;
+        }
+        if (!action) {
+            alert('一括操作を選択してください。');
+            return;
+        }
         const batch = writeBatch(db);
 
         if (action === 'delete') {
@@ -569,26 +736,47 @@ export function initAdminPage(auth, db, functions, XLSX) {
             selectedIds.forEach(id => batch.delete(doc(db, 'members', id)));
             await batch.commit();
             alert(`${selectedIds.length} 件の部員を削除しました。`);
+
         } else if (action === 'update-expiry') {
             const choice = bulkExpirySelect.value;
-            if (!choice) { alert('更新後の有効期限を選択してください。'); return; }
+            if (!choice) {
+                alert('更新後の有効期限を選択してください。');
+                return;
+            }
             if (!confirm(`選択した ${selectedIds.length} 件の部員の有効期限を更新しますか？`)) return;
+
             if (choice === 'expire-now') {
                 selectedIds.forEach(id => {
                     batch.update(doc(db, 'members', id), { isExpired: true, expiryDate: null });
                 });
-            } else {
-                const newExpiryDate = getExpiryDate(choice);
+            } else if (choice === 'custom') {
+                const customDate = bulkCustomExpiryInput.value;
+                if (!customDate) {
+                    alert('有効期限の年月日を指定してください。');
+                    return;
+                }
+                const newExpiryDate = new Date(customDate);
                 selectedIds.forEach(id => {
                     batch.update(doc(db, 'members', id), {
                         expiryDate: Timestamp.fromDate(newExpiryDate),
                         isExpired: false
                     });
                 });
+            } else {
+                const newExpiryDate = getPresetExpiryDate(choice);
+                if (newExpiryDate) {
+                    selectedIds.forEach(id => {
+                        batch.update(doc(db, 'members', id), {
+                            expiryDate: Timestamp.fromDate(newExpiryDate),
+                            isExpired: false
+                        });
+                    });
+                }
             }
             await batch.commit();
             alert(`${selectedIds.length} 件の部員の有効期限を更新しました。`);
         }
+
         const selectAllCheckbox = document.getElementById('select-all-checkbox');
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
         renderMemberList();
@@ -650,7 +838,7 @@ export function initAdminPage(auth, db, functions, XLSX) {
                     const studentId = String(member['学籍番号(必須)'] || '');
                     const email = member['メールアドレス(必須)'];
                     const discordId = String(member['DiscordユーザーID(必須)'] || '');
-                    
+
                     if (!name || !furigana || !studentId || !email || !discordId) {
                         missingFieldsCount++;
                         continue;
@@ -741,17 +929,15 @@ export function initAdminPage(auth, db, functions, XLSX) {
         const logsCollection = collection(db, 'activity_logs');
         let q = query(logsCollection, orderBy('timestamp', 'desc'));
 
-        // 期間フィルタ
         const now = new Date();
         let startDate;
-        if (period === '1m') startDate = new Date(now.setMonth(now.getMonth() - 1));
-        else if (period === '3m') startDate = new Date(now.setMonth(now.getMonth() - 3));
-        else if (period === '1y') startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+        if (period === '1m') startDate = new Date(new Date().setMonth(now.getMonth() - 1));
+        else if (period === '3m') startDate = new Date(new Date().setMonth(now.getMonth() - 3));
+        else if (period === '1y') startDate = new Date(new Date().setFullYear(now.getFullYear() - 1));
         if (startDate) {
             q = query(q, where('timestamp', '>=', Timestamp.fromDate(startDate)));
         }
 
-        // ページネーション
         const startAfterDoc = pageStartMarkers[logCurrentPage - 1];
         if (startAfterDoc) {
             q = query(q, startAfter(startAfterDoc));
@@ -761,13 +947,9 @@ export function initAdminPage(auth, db, functions, XLSX) {
         try {
             const snapshot = await getDocs(q);
             const docs = snapshot.docs;
-            let hasNextPage = false;
-            if (docs.length > docsPerPage) {
-                hasNextPage = true;
-                docs.pop();
-            }
+            let hasNextPage = docs.length > docsPerPage;
+            if (hasNextPage) docs.pop();
 
-            // 次のページの開始点を記録
             if (docs.length > 0) {
                 pageStartMarkers[logCurrentPage] = docs[docs.length - 1];
             }
@@ -776,12 +958,12 @@ export function initAdminPage(auth, db, functions, XLSX) {
             logNextButton.disabled = !hasNextPage;
             logPageInfo.textContent = `ページ ${logCurrentPage}`;
 
-            // ログの描画
-            activityLogListDiv.innerHTML = '';
-            if (snapshot.empty) {
+            if (docs.length === 0 && logCurrentPage === 1) {
                 activityLogListDiv.innerHTML = '<p>該当するログはありません。</p>';
                 return;
             }
+
+            activityLogListDiv.innerHTML = '';
             docs.forEach(docSnap => {
                 const log = docSnap.data();
                 const timestamp = log.timestamp ? log.timestamp.toDate() : new Date();

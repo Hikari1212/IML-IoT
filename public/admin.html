@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>部員管理</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -21,6 +22,7 @@
                 <li><a href="#" id="nav-link-members">部員管理</a></li>
                 <li><a href="#" id="nav-link-admins">管理者管理</a></li>
                 <li><a href="#" id="nav-link-logs">入退室ログ</a></li>
+                <li><a href="#" id="nav-link-analytics">分析</a></li>
                 <li><a href="#" id="nav-link-discord">Discord連携</a></li>
                 <li><a href="#" id="nav-link-settings">設定</a></li>
             </div>
@@ -95,7 +97,9 @@
                         <option value="">有効期限を選択</option>
                         <option value="this-october">今年の10月末</option>
                         <option value="next-april">来年の4月末</option>
+                        <option value="custom">年月日を指定</option>
                     </select>
+                    <input type="date" id="new-member-custom-expiry" style="display: none;">
                     <button type="submit">部員を追加</button>
                 </form>
                 <hr>
@@ -127,12 +131,16 @@
                             <option value="update-expiry">有効期限を更新</option>
                             <option value="delete">削除</option>
                         </select>
-                        <select id="bulk-expiry-select" style="display: none;">
-                            <option value="">期限を選択</option>
-                            <option value="this-october">今年の10月末</option>
-                            <option value="next-april">来年の4月末</option>
-                            <option value="expire-now">失効させる</option>
-                        </select>
+                        <div id="bulk-expiry-controls" style="display: none;">
+                            <select id="bulk-expiry-select">
+                                <option value="">期限を選択</option>
+                                <option value="this-october">今年の10月末</option>
+                                <option value="next-april">来年の4月末</option>
+                                <option value="custom">年月日を指定</option>
+                                <option value="expire-now">失効させる</option>
+                            </select>
+                            <input type="date" id="bulk-custom-expiry" style="display: none;">
+                        </div>
                         <button id="bulk-apply-button">適用</button>
                     </div>
                 </div>
@@ -186,6 +194,18 @@
                 </div>
             </div>
 
+            <div id="analytics-panel" class="panel content-panel" style="display: none;">
+                <h2>利用状況分析 (直近1ヶ月)</h2>
+                <div class="panel" style="background-color: #f9f9f9; border-color: #e0e0e0; margin-top: 20px;">
+                    <h3 style="margin-top: 0;">部室滞在時間ランキング</h3>
+                    <canvas id="stay-duration-chart"></canvas>
+                </div>
+                <div class="panel" style="background-color: #f9f9f9; border-color: #e0e0e0; margin-top: 20px;">
+                    <h3 style="margin-top: 0;">入室回数ランキング</h3>
+                    <canvas id="entry-count-chart"></canvas>
+                </div>
+            </div>
+
             <div id="discord-integration-panel" class="panel content-panel" style="display: none;">
                 <h2>Discord連携設定</h2>
                 <form id="discord-settings-form" class="settings-form">
@@ -203,9 +223,7 @@
                             <label for="discord-in-room-role-enabled" class="slider"></label>
                         </div>
                     </div>
-
                     <hr>
-
                     <div class="form-group">
                         <label for="discord-token">Discord Bot トークン</label>
                         <input type="password" id="discord-token" placeholder="Botのトークン" required>
@@ -243,9 +261,7 @@
 
         </div>
     </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
+    
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
@@ -267,8 +283,9 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-northeast1');
 
+        // Chart.jsのインスタンスを渡す
         import { initAdminPage } from './admin.js';
-        initAdminPage(auth, db, functions, window.XLSX);
+        initAdminPage(auth, db, functions, window.XLSX, window.Chart);
     </script>
 </body>
 </html>
