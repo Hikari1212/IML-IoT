@@ -668,3 +668,38 @@ input:checked + .slider:before {
     align-items: center;
     gap: 5px;
 }
+
+/* --- ステータス文字の色 --- */
+.status-text.status-expired {
+    color: #e53935; /* 赤色 */
+    font-weight: bold;
+}
+.status-text.status-in-text {
+    color: #4CAF50; /* 緑色 */
+}
+
+/* --- 絞り込みフィルターのスタイル --- */
+.filter-grid {
+    display: flex; /* 横一列に */
+    flex-wrap: nowrap; /* 折り返さない */
+    overflow-x: auto; /* はみ出した場合に横スクロール */
+    gap: 10px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 6px;
+    align-items: center; 
+    padding-bottom: 20px; /* スクロールバーのための余白 */
+}
+.filter-label {
+    font-weight: bold;
+    white-space: nowrap;
+    margin-right: 5px;
+}
+.filter-grid select {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    min-width: 120px; /* 最小幅を確保 */
+}

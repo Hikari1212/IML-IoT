@@ -123,6 +123,27 @@
                         <option value="status">在室状況</option>
                     </select>
                 </div>
+                <div id="filter-controls" class="filter-grid">
+                    <span class="filter-label">絞り込み</span>
+                    <select id="filter-expired"><option value="">有効/失効</option><option value="false">有効</option><option value="true">失効</option></select>
+                    <select id="filter-status"><option value="">在室状況</option><option value="in">在室</option><option value="out">不在</option></select>
+                    <select id="filter-grade"><option value="">学年</option><option value="B1">B1</option><option value="B2">B2</option><option value="B3">B3</option><option value="B4">B4</option><option value="M1">M1</option><option value="M2">M2</option></select>
+                    <select id="filter-category"><option value="">類</option><option value="Ⅰ類">Ⅰ類</option><option value="Ⅱ類">Ⅱ類</option><option value="Ⅲ類">Ⅲ類</option></select>
+                    <select id="filter-project"><option value="">プロジェクト</option></select>
+                    <select id="filter-gender"><option value="">性別</option><option value="男性">男性</option><option value="女性">女性</option><option value="その他">その他</option></select>
+                    <select id="filter-age">
+                        <option value="">年齢</option>
+                        <option value="18">18歳</option>
+                        <option value="19">19歳</option>
+                        <option value="20">20歳</option>
+                        <option value="21">21歳</option>
+                        <option value="22">22歳</option>
+                        <option value="23">23歳</option>
+                        <option value="24">24歳</option>
+                        <option value="25">25歳</option>
+                        <option value="26+">26歳以上</option>
+                    </select>
+                </div>
                 <div id="bulk-action-panel" class="panel"
                     style="display: none; background-color: #f0f4f8; margin-bottom: 15px; padding: 15px;">
                     <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">

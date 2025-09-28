@@ -61,9 +61,10 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     let logCurrentPage = 1;
     let pageStartMarkers = [null];
 
-    // --- 検索・ソート機能 ---
+    // --- 検索・ソート・絞り込み機能 ---
     const searchInput = document.getElementById('search-input');
     const sortSelect = document.getElementById('sort-select');
+    const filterControls = document.getElementById('filter-controls');
     let allMembers = [];
 
     // --- 管理者管理機能 ---
@@ -129,8 +130,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     });
 
     function showPanel(panelToShow) {
-        exportOptionsModal.style.display = 'none';
-        
+        exportOptionsModal.style.display = 'none'; 
+
         if (isDiscordFormDirty && !confirm("未保存の変更があります。ページを移動しますか？")) return;
         isDiscordFormDirty = false;
 
@@ -256,8 +257,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 datasets: [{
                     label: datasetLabel,
                     data: data,
-                    backgroundColor: 'rgba(63, 81, 181, 0.5)',
-                    borderColor: 'rgba(63, 81, 181, 1)',
+                    backgroundColor: 'rgba(76, 175, 80, 0.5)',
+                    borderColor: 'rgba(76, 175, 80, 1)',
                     borderWidth: 1
                 }]
             },
@@ -439,23 +440,69 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             if (updates.length > 0) {
                 Promise.all(updates).then(() => console.log(`${updates.length}件のメンバーを失効に更新しました。`));
             }
+            populateProjectFilter();
             renderMemberList();
         });
     }
 
-    function renderMemberList() {
-        const searchTerm = searchInput.value.toLowerCase();
-        const sortOption = sortSelect.value;
-        let filteredMembers = allMembers.filter(member => {
-            if (!searchTerm) return true;
-            const name = member.name.toLowerCase();
-            const furigana = (member.furigana || '').toLowerCase();
-            const grade = (member.grade || '').toLowerCase();
-            const project = (member.project || '').toLowerCase();
-            const age = member.age ? member.age.toString() : '';
-            return name.includes(searchTerm) || furigana.includes(searchTerm) || grade.includes(searchTerm) || project.includes(searchTerm) || age.includes(searchTerm);
+    function populateProjectFilter() {
+        const projectFilter = document.getElementById('filter-project');
+        const existingProjects = new Set(Array.from(projectFilter.options).map(opt => opt.value));
+        const currentProjects = new Set(allMembers.map(m => m.project).filter(Boolean));
+
+        currentProjects.forEach(project => {
+            if (!existingProjects.has(project)) {
+                const option = document.createElement('option');
+                option.value = project;
+                option.textContent = project;
+                projectFilter.appendChild(option);
+            }
         });
-        filteredMembers.sort((a, b) => {
+    }
+
+    function renderMemberList() {
+        let displayedMembers = [...allMembers];
+
+        const filters = {
+            expired: document.getElementById('filter-expired').value,
+            status: document.getElementById('filter-status').value,
+            grade: document.getElementById('filter-grade').value,
+            category: document.getElementById('filter-category').value,
+            project: document.getElementById('filter-project').value,
+            gender: document.getElementById('filter-gender').value,
+            age: document.getElementById('filter-age').value
+        };
+
+        displayedMembers = displayedMembers.filter(member => {
+            if (filters.expired && String(member.isExpired) !== filters.expired) return false;
+            if (filters.status && member.status !== filters.status) return false;
+            if (filters.grade && member.grade !== filters.grade) return false;
+            if (filters.category && member.category !== filters.category) return false;
+            if (filters.project && member.project !== filters.project) return false;
+            if (filters.gender && member.gender !== filters.gender) return false;
+            if (filters.age) {
+                const age = member.age;
+                if (!age) return false;
+                if (filters.age === '26+') {
+                    if (age < 26) return false;
+                } else {
+                    if (age !== parseInt(filters.age, 10)) return false;
+                }
+            }
+            return true;
+        });
+
+        const searchTerm = searchInput.value.toLowerCase();
+        if (searchTerm) {
+            displayedMembers = displayedMembers.filter(member => {
+                const name = member.name.toLowerCase();
+                const furigana = (member.furigana || '').toLowerCase();
+                return name.includes(searchTerm) || furigana.includes(searchTerm);
+            });
+        }
+        
+        const sortOption = sortSelect.value;
+        displayedMembers.sort((a, b) => {
             const gradeOrder = { 'B1': 1, 'B2': 2, 'B3': 3, 'B4': 4, 'M1': 5, 'M2': 6 };
             switch (sortOption) {
                 case 'name-asc': return (a.furigana || a.name).localeCompare(b.furigana || b.name, 'ja');
@@ -478,17 +525,20 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         });
 
         adminMemberListDiv.innerHTML = `<div class="member-header"><input type="checkbox" id="select-all-checkbox"><span>メンバー情報</span></div>`;
-        if (filteredMembers.length === 0) {
+        if (displayedMembers.length === 0) {
             adminMemberListDiv.innerHTML += '<p style="text-align: center; padding: 20px;">該当する部員はいません。</p>';
             updateSelection();
             return;
         }
         const checkedIds = new Set(Array.from(document.querySelectorAll('.member-checkbox:checked')).map(cb => cb.dataset.id));
-        filteredMembers.forEach(member => {
+        displayedMembers.forEach(member => {
             const statusText = member.isExpired ? '失効' : (member.status === 'in' ? '在室中' : '不在');
+            const statusClass = member.isExpired ? 'status-expired' : (member.status === 'in' ? 'status-in-text' : '');
             const memberClass = member.isExpired ? 'member expired' : 'member';
             const expiryDateStr = member.expiryDate ? member.expiryDate.toDate().toLocaleDateString('ja-JP') : '期限なし';
             const isChecked = checkedIds.has(member.id) ? 'checked' : '';
+            const keyInfo = member.isExpired ? '' : `キー[${member.assignedKey}] / `;
+
             const html = `
                 <div class="${memberClass}" id="member-item-${member.id}">
                     <div class="member-summary">
@@ -498,7 +548,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                         </div>
                         <div class="summary-status">
                             <span class="expiry-date">期限: ${expiryDateStr}</span>
-                            <span class="status-text">${statusText}</span>
+                            <span class="status-text ${statusClass}">${statusText}</span>
                         </div>
                         <div class="summary-actions">
                              <button class="edit-button" data-id="${member.id}">編集</button>
@@ -511,7 +561,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                         <p><strong>Discord ID:</strong> ${member.discordId || '未設定'}</p>
                         <p><strong>メールアドレス:</strong> ${member.email || '未登録'}</p>
                         <p><strong>所属プロジェクト:</strong> ${member.project || '未定'}</p>
-                        <p><strong>その他:</strong> キー[${member.assignedKey}] / ${member.gender || ''} / ${member.grade || ''} / ${member.category || ''} / ${member.age || '?'}歳</p>
+                        <p><strong>その他:</strong> ${keyInfo}${member.gender || ''} / ${member.grade || ''} / ${member.category || ''} / ${member.age || '?'}歳</p>
                     </div>
                     <div class="edit-view" style="display:none;">
                         <div class="edit-form">
@@ -544,9 +594,11 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         });
         updateSelection();
     }
-
+    
+    // イベントリスナー
     searchInput.addEventListener('input', renderMemberList);
     sortSelect.addEventListener('change', renderMemberList);
+    filterControls.addEventListener('change', renderMemberList);
 
     addMemberForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -973,7 +1025,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                         age: parseInt(member.age, 10) || null,
                         assignedKey: assignedKey,
                         status: 'out',
-                        isExpired: false,
+                        isExpired: true, 
                         expiryDate: null,
                         createdAt: serverTimestamp(),
                         lastUpdated: serverTimestamp()
@@ -985,7 +1037,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                     `インポート完了。\n` +
                     `追加: ${addedCount}件\n` +
                     `スキップ(重複): ${duplicateCount}件\n` +
-                    `スキップ(必須項目不足): ${missingFieldsCount}件`
+                    `スキップ(必須項目不足): ${missingFieldsCount}件\n` +
+                    `インポートされた部員は「失効」状態で登録されています。部員管理ページから有効期限を更新してください。`
                 );
                 excelFileInput.value = '';
             };
