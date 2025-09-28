@@ -85,12 +85,16 @@ exports.getMemberListAPI = onRequest({cors: true}, async (req, res) => {
 
     const memberList = membersSnapshot.docs.map((doc) => {
       const data = doc.data();
+      const expiryDateISO = data.expiryDate ? data.expiryDate.toDate().toISOString() : null;
       return {
         name: data.name,
         furigana: data.furigana || "",
         grade: data.grade || "",
         project: data.project || "",
         status: data.status,
+        discordId: data.discordId || "",
+        email: data.email || "",
+        expiryDate: expiryDateISO,
       };
     });
 
