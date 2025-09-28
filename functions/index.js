@@ -279,3 +279,72 @@ exports.deleteAdmin = onCall({cors: true}, async (request) => {
   await db.collection("admins").doc(uid).delete();
   return {result: "管理者を削除しました。"};
 });
+
+/**
+ * 生体情報登録用のワンタイムトークンを生成する関数 (管理者専用)
+ */
+exports.generateEnrollmentToken = onCall({cors: true}, async (request) => {
+  // 認証チェック: 管理者でなければエラー
+  if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
+    throw new HttpsError("permission-denied", "権限がありません。");
+  }
+
+  const {memberId, biometricType} = request.data;
+  if (!memberId || !biometricType) {
+    throw new HttpsError("invalid-argument", "部員IDと種別が必要です。");
+  }
+  if (!["fingerprint", "face"].includes(biometricType)) {
+    throw new HttpsError("invalid-argument", "種別は 'fingerprint' または 'face' である必要があります。");
+  }
+
+  // 5分後に失効するトークンを作成
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+  const tokenDoc = await db.collection("enrollment_tokens").add({
+    memberId: memberId,
+    type: biometricType,
+    // ▼▼▼ 修正点 ▼▼▼
+    expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+  });
+
+  // ドキュメントIDをトークンとして返す
+  return {token: tokenDoc.id};
+});
+
+
+/**
+ * Raspberry Piから生体情報を受け取り登録する関数
+ */
+exports.registerBiometric = onCall({cors: true}, async (request) => {
+  // 本番環境ではApp Check等でデバイス認証を行うことを強く推奨します
+  const {token, templateData} = request.data;
+  if (!token || !templateData) {
+    throw new HttpsError("invalid-argument", "トークンとテンプレートデータが必要です。");
+  }
+
+  const tokenRef = db.collection("enrollment_tokens").doc(token);
+  const tokenDoc = await tokenRef.get();
+
+  // トークンの検証
+  if (!tokenDoc.exists) {
+    throw new HttpsError("not-found", "無効なトークンです。");
+  }
+  const tokenData = tokenDoc.data();
+  if (tokenData.expiresAt.toDate() < new Date()) {
+    await tokenRef.delete(); // 期限切れのトークンは削除
+    throw new HttpsError("deadline-exceeded", "トークンの有効期限が切れています。");
+  }
+
+  // biometricsコレクションにデータを保存
+  await db.collection("biometrics").add({
+    memberId: tokenData.memberId,
+    type: tokenData.type,
+    templateData: templateData, // ラズパイから送られてきた特徴データ
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // 使用済みトークンを削除
+  await tokenRef.delete();
+
+  return {result: `${tokenData.type} の登録が成功しました。`};
+});

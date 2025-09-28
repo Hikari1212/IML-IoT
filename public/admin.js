@@ -27,6 +27,11 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const exportColumnSelectionDiv = document.getElementById('export-column-selection');
     const exportExcludeExpiredCheckbox = document.getElementById('export-exclude-expired');
 
+    // --- トークン表示モーダル ---
+    const tokenDisplayModal = document.getElementById('token-display-modal');
+    const tokenDisplayText = document.getElementById('token-display-text');
+    const closeTokenModalButton = document.getElementById('close-token-modal-button');
+
     // --- 一括操作のDOM要素 ---
     const bulkActionPanel = document.getElementById('bulk-action-panel');
     const selectionCount = document.getElementById('selection-count');
@@ -41,10 +46,10 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const sideNav = document.getElementById('side-nav');
     const navLinkMembers = document.getElementById('nav-link-members');
     const navLinkLogs = document.getElementById('nav-link-logs');
-    const navLinkHelp = document.getElementById('nav-link-help'); // ヘルプリンク
+    const navLinkHelp = document.getElementById('nav-link-help');
     const memberManagementPanel = document.getElementById('member-management-panel');
     const activityLogPanel = document.getElementById('activity-log-panel');
-    const helpPanel = document.getElementById('help-panel'); // ヘルプパネル
+    const helpPanel = document.getElementById('help-panel');
 
     // --- 分析ページ関連 ---
     const navLinkAnalytics = document.getElementById('nav-link-analytics');
@@ -69,6 +74,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const filterControls = document.getElementById('filter-controls');
     const helpSearchInput = document.getElementById('help-search-input');
     let allMembers = [];
+    let biometricsMap = {};
 
     // --- 管理者管理機能 ---
     const navLinkAdmins = document.getElementById('nav-link-admins');
@@ -426,26 +432,38 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
     // --- 部員管理機能 ---
     function loadAdminMemberList() {
-        const q = query(membersCollection);
-        onSnapshot(q, (snapshot) => {
-            const now = new Date();
-            allMembers = [];
-            const updates = [];
-            snapshot.forEach(docSnap => {
-                const member = docSnap.data();
-                const memberId = docSnap.id;
-                let isExpired = member.isExpired;
-                if (member.expiryDate && member.expiryDate.toDate() < now && !isExpired) {
-                    updates.push(updateDoc(doc(db, 'members', memberId), { isExpired: true }));
-                    isExpired = true;
+        // 生体情報も同時にリッスン
+        onSnapshot(query(collection(db, 'biometrics')), (bioSnapshot) => {
+            biometricsMap = {};
+            bioSnapshot.forEach(doc => {
+                const data = doc.data();
+                if (!biometricsMap[data.memberId]) {
+                    biometricsMap[data.memberId] = [];
                 }
-                allMembers.push({ id: memberId, ...member, isExpired });
+                biometricsMap[data.memberId].push(data.type);
             });
-            if (updates.length > 0) {
-                Promise.all(updates).then(() => console.log(`${updates.length}件のメンバーを失効に更新しました。`));
-            }
-            populateProjectFilter();
-            renderMemberList();
+
+            // membersのリッスンは生体情報取得後に実行
+            onSnapshot(query(membersCollection), (memberSnapshot) => {
+                const now = new Date();
+                allMembers = [];
+                const updates = [];
+                memberSnapshot.forEach(docSnap => {
+                    const member = docSnap.data();
+                    const memberId = docSnap.id;
+                    let isExpired = member.isExpired;
+                    if (member.expiryDate && member.expiryDate.toDate() < now && !isExpired) {
+                        updates.push(updateDoc(doc(db, 'members', memberId), { isExpired: true }));
+                        isExpired = true;
+                    }
+                    allMembers.push({ id: memberId, ...member, isExpired });
+                });
+                if (updates.length > 0) {
+                    Promise.all(updates).then(() => console.log(`${updates.length}件のメンバーを失効に更新しました。`));
+                }
+                populateProjectFilter();
+                renderMemberList();
+            });
         });
     }
 
@@ -542,6 +560,26 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             const expiryDateStr = member.expiryDate ? member.expiryDate.toDate().toLocaleDateString('ja-JP') : '期限なし';
             const isChecked = checkedIds.has(member.id) ? 'checked' : '';
             const keyInfo = member.isExpired ? '' : `キー[${member.assignedKey}] / `;
+            
+            // 生体情報のステータス表示を生成
+            const memberBiometrics = biometricsMap[member.id] || [];
+            const hasFingerprint = memberBiometrics.includes('fingerprint');
+            const hasFace = memberBiometrics.includes('face');
+
+            const biometricHTML = `
+                <div class="biometric-info">
+                    <div class="biometric-status">
+                        <span class="status-label">指紋</span>
+                        <span class="status-text ${hasFingerprint ? 'status-registered' : 'status-not-registered'}">${hasFingerprint ? '登録済み' : '未登録'}</span>
+                        <button class="register-biometric-button" data-id="${member.id}" data-type="fingerprint" ${hasFingerprint ? 'disabled' : ''}>登録</button>
+                    </div>
+                    <div class="biometric-status">
+                        <span class="status-label">顔</span>
+                        <span class="status-text ${hasFace ? 'status-registered' : 'status-not-registered'}">${hasFace ? '登録済み' : '未登録'}</span>
+                        <button class="register-biometric-button" data-id="${member.id}" data-type="face" ${hasFace ? 'disabled' : ''}>登録</button>
+                    </div>
+                </div>
+            `;
 
             const html = `
                 <div class="${memberClass}" id="member-item-${member.id}">
@@ -566,6 +604,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                         <p><strong>メールアドレス:</strong> ${member.email || '未登録'}</p>
                         <p><strong>所属プロジェクト:</strong> ${member.project || '未定'}</p>
                         <p><strong>その他:</strong> ${keyInfo}${member.gender || ''} / ${member.grade || ''} / ${member.category || ''} / ${member.age || '?'}歳</p>
+                        ${biometricHTML}
                     </div>
                     <div class="edit-view" style="display:none;">
                         <div class="edit-form">
@@ -603,8 +642,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     searchInput.addEventListener('input', renderMemberList);
     sortSelect.addEventListener('change', renderMemberList);
     filterControls.addEventListener('change', renderMemberList);
-
-    // ▼▼▼ ヘルプページの検索機能を追加 ▼▼▼
     helpSearchInput.addEventListener('input', (e) => {
         const searchTerm = e.target.value.toLowerCase();
         const topics = document.querySelectorAll('#help-panel .help-topic');
@@ -685,6 +722,31 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
     document.addEventListener('click', async (e) => {
         const target = e.target;
+        
+        // 生体情報登録ボタンの処理
+        if (target.classList.contains('register-biometric-button')) {
+            const memberId = target.dataset.id;
+            const biometricType = target.dataset.type;
+            const typeText = biometricType === 'fingerprint' ? '指紋' : '顔';
+            if (!confirm(`この部員の${typeText}情報を登録しますか？`)) return;
+
+            try {
+                target.textContent = 'トークン生成中...';
+                target.disabled = true;
+                const generateToken = httpsCallable(functions, 'generateEnrollmentToken');
+                const result = await generateToken({ memberId, biometricType });
+                
+                tokenDisplayText.textContent = result.data.token;
+                tokenDisplayModal.style.display = 'flex';
+            } catch (error) {
+                console.error("トークン生成エラー:", error);
+                alert(`エラー: ${error.message}`);
+            } finally {
+                target.textContent = '登録';
+                target.disabled = false;
+            }
+        }
+
         if (target.matches('.member-checkbox, #select-all-checkbox')) return;
 
         const memberItem = target.closest('.member');
@@ -761,6 +823,11 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         }
         memberItem.classList.toggle('is-open');
     });
+
+    closeTokenModalButton.addEventListener('click', () => {
+        tokenDisplayModal.style.display = 'none';
+    });
+
 
     adminMemberListDiv.addEventListener('change', (e) => {
         if (e.target.matches('select[id^="edit-expiry-"]')) {

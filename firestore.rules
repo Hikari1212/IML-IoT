@@ -43,5 +43,19 @@ service cloud.firestore {
       // 管理者のみが読み取り、書き込みを許可
       allow read, write: if isAdmin();
     }
+    
+    // 生体情報データ (クライアントからの読み書きをすべて拒否)
+    match /biometrics/{bioId} {
+      // 管理者には読み込みを許可
+      allow read: if isAdmin();
+      // クライアントからの書き込みは引き続き全て拒否
+      allow write: if false;
+    }
+
+    // 登録用の一時トークン (クライアントからの読み書きをすべて拒否)
+    match /enrollment_tokens/{tokenId} {
+      allow read, write: if false;
+    }
+    
   }
 }
