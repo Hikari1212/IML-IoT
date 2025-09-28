@@ -14,11 +14,18 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const loginButton = document.getElementById('login-button');
     const logoutLink = document.getElementById('logout-link');
     const addMemberForm = document.getElementById('add-member-form');
-    const exportExcelButton = document.getElementById('export-excel-button');
+    const adminMemberListDiv = document.getElementById('admin-member-list');
+    
+    // --- Excel関連DOM要素 ---
     const excelFileInput = document.getElementById('excel-file-input');
     const importExcelButton = document.getElementById('import-excel-button');
     const downloadTemplateButton = document.getElementById('download-template-button');
-    const adminMemberListDiv = document.getElementById('admin-member-list');
+    const exportExcelButton = document.getElementById('export-excel-button');
+    const exportOptionsModal = document.getElementById('export-options-modal');
+    const executeExportButton = document.getElementById('execute-export-button');
+    const cancelExportButton = document.getElementById('cancel-export-button');
+    const exportColumnSelectionDiv = document.getElementById('export-column-selection');
+    const exportExcludeExpiredCheckbox = document.getElementById('export-exclude-expired');
 
     // --- 一括操作のDOM要素 ---
     const bulkActionPanel = document.getElementById('bulk-action-panel');
@@ -86,11 +93,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             loginForm.parentElement.style.display = 'none';
             mainContent.style.display = 'block';
             hamburgerButton.style.display = 'flex';
-            loadAdminMemberList();
-            setupLogEventListeners();
-            loadActivityLogs();
-            loadAdminList();
-            loadSettings();
+            initializePage();
         } else {
             loginForm.parentElement.style.display = 'flex';
             mainContent.style.display = 'none';
@@ -98,6 +101,15 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             sideNav.classList.remove('open');
         }
     });
+
+    function initializePage() {
+        populateExportColumnSelection();
+        loadAdminMemberList();
+        setupLogEventListeners();
+        loadActivityLogs();
+        loadAdminList();
+        loadSettings();
+    }
 
     loginButton.addEventListener('click', () => {
         const email = document.getElementById('login-email').value;
@@ -117,6 +129,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     });
 
     function showPanel(panelToShow) {
+        exportOptionsModal.style.display = 'none';
+        
         if (isDiscordFormDirty && !confirm("未保存の変更があります。ページを移動しますか？")) return;
         isDiscordFormDirty = false;
 
@@ -178,8 +192,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
         const snapshot = await getDocs(q);
         if (snapshot.empty) {
-            durationChartContainer.innerHTML = '<p>直近1ヶ月のログデータがありません。</p>';
-            entryChartContainer.innerHTML = '<p>直近1ヶ月のログデータがありません。</p>';
+            durationChartContainer.innerHTML = '<h3>部室滞在時間</h3><p>直近1ヶ月のログデータがありません。</p>';
+            entryChartContainer.innerHTML = '<h3>部室入室回数</h3><p>直近1ヶ月のログデータがありません。</p>';
             return;
         }
 
@@ -212,22 +226,24 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         stayDurationChart = renderChart(
             'stay-duration-chart',
             stayDurationChart,
+            '部室滞在時間',
             '滞在時間',
-            '時間 (Hours)', // 横軸の単位を追加
+            '時間 (Hours)',
             sortedDurations.map(item => item[0]),
             sortedDurations.map(item => (item[1] / (1000 * 60 * 60)).toFixed(2))
         );
         entryCountChart = renderChart(
             'entry-count-chart',
             entryCountChart,
+            '部室入室回数',
             '入室回数',
-            '回数 (Count)', // 横軸の単位を追加
+            '回数 (Count)',
             sortedEntries.map(item => item[0]),
             sortedEntries.map(item => item[1])
         );
     }
 
-    function renderChart(canvasId, chartInstance, datasetLabel, xAxisLabel, labels, data) {
+    function renderChart(canvasId, chartInstance, chartTitle, datasetLabel, xAxisLabel, labels, data) {
         const container = document.getElementById(canvasId).parentElement;
         container.querySelector('p')?.remove();
         if (chartInstance) chartInstance.destroy();
@@ -250,13 +266,18 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 scales: {
                     x: {
                         beginAtZero: true,
-                        title: { // x軸(横軸)のタイトル設定を追加
+                        title: {
                             display: true,
                             text: xAxisLabel
                         }
                     }
                 },
                 plugins: {
+                    title: {
+                        display: true,
+                        text: chartTitle,
+                        font: { size: 16 }
+                    },
                     legend: {
                         display: false
                     }
@@ -796,33 +817,108 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         renderMemberList();
     });
 
-    const exampleRow = {
-        '名前(必須)': '電通 太郎',
-        'フリガナ(必須)': 'デンツウ タロウ',
-        '学籍番号(必須)': '2500001',
-        'メールアドレス(必須)': 'taro.dentsu@example.com',
-        'DiscordユーザーID(必須)': '1234567890123456789',
-        '性別': '男性',
-        '年齢': 20,
-        '学年': 'B3',
-        '類': 'Ⅱ類',
-        '所属プロジェクト': 'IMLプロジェクト'
+    const templateHeaders = {
+        '名前(必須)': 'name',
+        'フリガナ(必須)': 'furigana',
+        '学籍番号(必須)': 'studentId',
+        'メールアドレス(必須)': 'email',
+        'DiscordユーザーID(必須)': 'discordId',
+        '性別': 'gender',
+        '年齢': 'age',
+        '学年': 'grade',
+        '類': 'category',
+        '所属プロジェクト': 'project'
     };
 
-    const templateHeaders = Object.keys(exampleRow);
-
     downloadTemplateButton.addEventListener('click', () => {
-        const worksheet = XLSX.utils.json_to_sheet([exampleRow], { header: templateHeaders });
+        const exampleRow = {};
+        for (const key in templateHeaders) {
+            exampleRow[key] = '';
+        }
+        exampleRow['名前(必須)'] = '電通 太郎';
+        exampleRow['フリガナ(必須)'] = 'デンツウ タロウ';
+
+        const worksheet = XLSX.utils.json_to_sheet([exampleRow], { header: Object.keys(templateHeaders) });
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, '部員テンプレート');
         XLSX.writeFile(workbook, '部員情報テンプレート.xlsx');
     });
 
-    const exportHeaders = [
-        '名前', 'フリガナ', '学籍番号', 'メールアドレス', 'DiscordユーザーID',
-        '性別', '年齢', '学年', '類', '所属プロジェクト',
-        '割り当てキー', 'ステータス', '有効期限', '失効'
-    ];
+    // --- Excelエクスポート 新機能 ---
+    const exportableColumns = {
+        '名前': 'name',
+        'フリガナ': 'furigana',
+        '学籍番号': 'studentId',
+        'メールアドレス': 'email',
+        'DiscordユーザーID': 'discordId',
+        '性別': 'gender',
+        '年齢': 'age',
+        '学年': 'grade',
+        '類': 'category',
+        '所属プロジェクト': 'project',
+        '割り当てキー': 'assignedKey',
+        'ステータス': 'status',
+        '有効期限': 'expiryDate',
+        '失効': 'isExpired'
+    };
+
+    function populateExportColumnSelection() {
+        exportColumnSelectionDiv.innerHTML = '';
+        for (const displayName in exportableColumns) {
+            const key = exportableColumns[displayName];
+            const label = document.createElement('label');
+            label.innerHTML = `<input type="checkbox" name="export-column" value="${key}" checked> ${displayName}`;
+            exportColumnSelectionDiv.appendChild(label);
+        }
+    }
+
+    exportExcelButton.addEventListener('click', () => {
+        if (allMembers.length === 0) {
+            alert('エクスポートするデータがありません。');
+            return;
+        }
+        exportOptionsModal.style.display = 'flex';
+    });
+    
+    cancelExportButton.addEventListener('click', () => {
+        exportOptionsModal.style.display = 'none';
+    });
+
+    executeExportButton.addEventListener('click', () => {
+        const excludeExpired = exportExcludeExpiredCheckbox.checked;
+        const membersToExport = excludeExpired ? allMembers.filter(m => !m.isExpired) : allMembers;
+
+        const selectedKeys = Array.from(document.querySelectorAll('#export-column-selection input:checked')).map(cb => cb.value);
+        if (selectedKeys.length === 0) {
+            alert('出力する項目を1つ以上選択してください。');
+            return;
+        }
+
+        const headers = selectedKeys.map(key => Object.keys(exportableColumns).find(k => exportableColumns[k] === key));
+        
+        const dataForExport = membersToExport.map(member => {
+            const row = {};
+            selectedKeys.forEach(key => {
+                const displayName = headers[selectedKeys.indexOf(key)];
+                let value = member[key] || '';
+                if (key === 'status') {
+                    value = member.isExpired ? '失効' : (member.status === 'in' ? '在室' : '不在');
+                } else if (key === 'expiryDate' && value) {
+                    value = value.toDate().toLocaleDateString('ja-JP');
+                }
+                row[displayName] = value;
+            });
+            return row;
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(dataForExport, { header: headers });
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, '部員情報');
+        XLSX.writeFile(workbook, '部員情報.xlsx');
+        
+        exportOptionsModal.style.display = 'none';
+    });
+
 
     importExcelButton.addEventListener('click', async () => {
         const file = excelFileInput.files[0];
@@ -846,18 +942,21 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 let duplicateCount = 0;
                 let missingFieldsCount = 0;
 
-                for (const member of membersToImport) {
-                    const name = member['名前(必須)'];
-                    const furigana = member['フリガナ(必須)'];
-                    const studentId = String(member['学籍番号(必須)'] || '');
-                    const email = member['メールアドレス(必須)'];
-                    const discordId = String(member['DiscordユーザーID(必須)'] || '');
+                for (const memberData of membersToImport) {
+                    const member = {};
+                    for (const header in templateHeaders) {
+                        if (memberData[header] !== undefined) {
+                            member[templateHeaders[header]] = memberData[header];
+                        }
+                    }
+                    
+                    const { name, furigana, studentId, email, discordId } = member;
 
                     if (!name || !furigana || !studentId || !email || !discordId) {
                         missingFieldsCount++;
                         continue;
                     }
-                    if (existingNames.has(name) || existingStudentIds.has(studentId)) {
+                    if (existingNames.has(name) || existingStudentIds.has(String(studentId))) {
                         duplicateCount++;
                         continue;
                     }
@@ -868,16 +967,10 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
                     const newMemberRef = doc(membersCollection);
                     batch.set(newMemberRef, {
-                        name: name,
-                        furigana: furigana,
-                        studentId: studentId,
-                        email: email,
-                        discordId: discordId,
-                        gender: member['性別'] || '',
-                        age: parseInt(member['年齢'], 10) || null,
-                        grade: member['学年'] || '',
-                        category: member['類'] || '',
-                        project: member['所属プロジェクト'] || '',
+                        ...member,
+                        studentId: String(studentId),
+                        discordId: String(discordId),
+                        age: parseInt(member.age, 10) || null,
                         assignedKey: assignedKey,
                         status: 'out',
                         isExpired: false,
@@ -904,30 +997,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             importExcelButton.disabled = false;
             importExcelButton.textContent = 'インポート実行';
         }
-    });
-
-    exportExcelButton.addEventListener('click', async () => {
-        if (allMembers.length === 0) return alert('エクスポートするデータがありません。');
-        const dataForExport = allMembers.map(member => ({
-            '名前': member.name,
-            'フリガナ': member.furigana,
-            '学籍番号': member.studentId,
-            'メールアドレス': member.email,
-            'DiscordユーザーID': member.discordId,
-            '性別': member.gender,
-            '年齢': member.age,
-            '学年': member.grade,
-            '類': member.category,
-            '所属プロジェクト': member.project,
-            '割り当てキー': member.assignedKey,
-            'ステータス': member.isExpired ? '失効' : (member.status === 'in' ? '在室' : '不在'),
-            '有効期限': member.expiryDate ? member.expiryDate.toDate().toLocaleDateString('ja-JP') : '',
-            '失効': member.isExpired
-        }));
-        const worksheet = XLSX.utils.json_to_sheet(dataForExport, { header: exportHeaders });
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, '部員情報');
-        XLSX.writeFile(workbook, '部員情報.xlsx');
     });
 
     // --- 入退室ログ機能 ---

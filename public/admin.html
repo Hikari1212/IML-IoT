@@ -132,7 +132,7 @@
                             <option value="update-expiry">有効期限を更新</option>
                             <option value="delete">削除</option>
                         </select>
-                        <div id="bulk-expiry-controls" style="display: none;">
+                        <div id="bulk-expiry-controls" style="display: none; align-items: center; gap: 10px;">
                             <select id="bulk-expiry-select">
                                 <option value="">期限を選択</option>
                                 <option value="this-october">今年の10月末</option>
@@ -198,11 +198,9 @@
             <div id="analytics-panel" class="panel content-panel" style="display: none;">
                 <h2>利用状況分析 (直近1ヶ月)</h2>
                 <div class="panel" style="background-color: #f9f9f9; border-color: #e0e0e0; margin-top: 20px;">
-                    <h3 style="margin-top: 0;">部室滞在時間ランキング</h3>
                     <canvas id="stay-duration-chart"></canvas>
                 </div>
                 <div class="panel" style="background-color: #f9f9f9; border-color: #e0e0e0; margin-top: 20px;">
-                    <h3 style="margin-top: 0;">入室回数ランキング</h3>
                     <canvas id="entry-count-chart"></canvas>
                 </div>
             </div>
@@ -259,10 +257,30 @@
                     <button type="button" id="update-api-key-button">新しいAPIキーを生成・更新</button>
                 </form>
             </div>
-
         </div>
     </div>
     
+    <div id="export-options-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content panel">
+            <h3>Excelエクスポート設定</h3>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="export-exclude-expired" checked>
+                    失効した部員を除外する
+                </label>
+            </div>
+            <div class="form-group">
+                <strong>出力する項目</strong>
+                <div id="export-column-selection" class="checkbox-grid">
+                    </div>
+            </div>
+            <div class="modal-actions">
+                <button id="execute-export-button" class="save-button">エクスポート実行</button>
+                <button id="cancel-export-button" class="cancel-button">キャンセル</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
@@ -284,7 +302,6 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-northeast1');
 
-        // Chart.jsのインスタンスを渡す
         import { initAdminPage } from './admin.js';
         initAdminPage(auth, db, functions, window.XLSX, window.Chart);
     </script>

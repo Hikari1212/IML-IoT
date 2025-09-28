@@ -523,7 +523,7 @@ h2 {
     border: 1px solid #ccc;
     border-radius: 4px;
 }
-   
+
 .settings-form button, #manual-sync-button, #update-api-key-button {
     padding: 10px 15px;
     border-radius: 4px;
@@ -627,4 +627,44 @@ input:checked + .slider:before {
 
 #login-form button:hover {
     background-color: #3f51b5;
+}
+
+/* --- モーダルウィンドウのスタイル --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000; /* サイドナビより手前に表示 */
+}
+
+.modal-content {
+    width: 90%;
+    max-width: 500px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* 出力項目のチェックボックスをグリッド表示にする */
+.checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.checkbox-grid label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
