@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 管理者かどうかを判断するヘルパー関数
+    function isAdmin() {
+      // 認証済みで、かつ'admins'コレクションに自分のUIDが存在するか
+      return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /members/{memberId} {
+      // 管理者は全ての操作を許可
+      allow read, write: if isAdmin();
+
+      // 【キオスク・一般公開向け】認証していないユーザーのアクセス制御
+      // メンバー情報の一覧取得と個別取得を許可
+      allow get, list: if request.auth == null;
+      // キオスク端末がstatusとlastUpdatedフィールドのみを更新することを許可
+      allow update: if request.auth == null
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'lastUpdated']);
+    // ★ 一般ユーザーからの新規作成を許可 (ただし、必ず失効状態で作成されるように強制)
+      allow create: if request.auth == null
+                    && request.resource.data.isExpired == true
+                    && request.resource.data.expiryDate == null
+                    && request.resource.data.status == 'out';
+    }
+
+    match /activity_logs/{logId} {
+      // 管理者は読み取りを許可
+      allow read: if isAdmin();
+      // キオスク端末からのログ作成を許可 (認証なし)
+      allow create: if request.auth == null;
+    }
+
+    // 管理者ユーザーのUIDを管理するためのコレクション
+    match /admins/{userId} {
+      // 管理者自身のみが読み書きできる
+      allow read, write: if isAdmin();
+    }
+    
+    // APIキーやDiscord設定を保存するコレクション
+    match /settings/{docId} {
+      // 管理者のみが読み取り、書き込みを許可
+      allow read, write: if isAdmin();
+    }
+  }
+}

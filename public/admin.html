@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>部員管理</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="hamburger-menu-button">
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+
+    <nav id="side-nav">
+        <ul>
+            <div>
+                <li><a href="#" id="nav-link-members">部員管理</a></li>
+                <li><a href="#" id="nav-link-admins">管理者管理</a></li>
+                <li><a href="#" id="nav-link-logs">入退室ログ</a></li>
+                <li><a href="#" id="nav-link-discord">Discord連携</a></li>
+                <li><a href="#" id="nav-link-settings">設定</a></li>
+            </div>
+            <div class="nav-bottom-links">
+                <li><a href="/index.html" target="_blank" rel="noopener noreferrer">サークル在室状況</a></li>
+                <li><a href="/kiosk.html" target="_blank" rel="noopener noreferrer">キオスク画面</a></li>
+                <li><a href="/register.html" target="_blank" rel="noopener noreferrer">部員名簿登録(一般)</a></li>
+                <li><a href="https://scrapbox.io/imedia-lab/%E9%83%A8%E5%AE%A4%E5%9C%A8%E5%AE%A4%E7%AE%A1%E7%90%86%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0" target="_blank" rel="noopener noreferrer">管理用資料</a></li>
+                <li><a href="#" id="logout-link">ログアウト</a></li>
+            </div>
+        </ul>
+    </nav>
+    
+    <h1>管理ページ</h1>
+
+    <div class="container" class="container">
+        <div id="login-form" class="panel" style="max-width: 450px;">
+            <h2>管理者ログイン</h2>
+            <input type="email" id="login-email" placeholder="メールアドレス" required>
+            <input type="password" id="login-password" placeholder="パスワード" required>
+            <button id="login-button">ログイン</button>
+        </div>
+    </div>
+    <div id="main-content" style="display: none;">
+        <div class="container">
+            <div id="member-management-panel" class="panel content-panel">
+                <h2>部員管理</h2>
+                <div class="panel" style="background-color: #f9f9f9; border-color: #e0e0e0; margin-top: 20px;">
+                    <h3 style="margin-top: 0;">Excelから一括登録</h3>
+                    <p style="font-size: 0.9em; color: #666;">
+                        指定の形式のExcelファイルをアップロードして、複数の部員を一度に追加できます。既に同じ名前の部員がいる場合は、自動でスキップされます。</p>
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <input type="file" id="excel-file-input" accept=".xlsx, .xls">
+                        <button id="import-excel-button">インポート実行</button>
+                        <button id="download-template-button">テンプレートをダウンロード</button>
+                    </div>
+                </div>
+
+                <hr>
+
+                <form id="add-member-form">
+                    <input type="text" id="new-member-name" placeholder="名前" required>
+                    <input type="text" id="new-member-furigana" placeholder="フリガナ" required>
+                    <input type="text" id="new-member-studentid" placeholder="学籍番号(7桁)" pattern="[0-9]{7}" maxlength="7"
+                        required>
+                    <input type="email" id="new-member-email" placeholder="メールアドレス">
+                    <input type="text" id="new-member-discordid" placeholder="DiscordユーザーID" pattern="^\d{17,18}$" title="DiscordユーザーIDは17桁から18桁の数字で入力してください。">
+                    <select id="new-member-gender" required>
+                        <option value="">性別を選択</option>
+                        <option value="男性">男性</option>
+                        <option value="女性">女性</option>
+                        <option value="その他">その他</option>
+                    </select>
+                    <input type="number" id="new-member-age" placeholder="年齢">
+                    <select id="new-member-grade" required>
+                        <option value="">学年を選択</option>
+                        <option value="B1">学部1年</option>
+                        <option value="B2">学部2年</option>
+                        <option value="B3">学部3年</option>
+                        <option value="B4">学部4年</option>
+                        <option value="M1">修士1年</option>
+                        <option value="M2">修士2年</option>
+                    </select>
+                    <select id="new-member-category" required>
+                        <option value="">類を選択</option>
+                        <option value="Ⅰ類">Ⅰ類</option>
+                        <option value="Ⅱ類">Ⅱ類</option>
+                        <option value="Ⅲ類">Ⅲ類</option>
+                    </select>
+                    <input type="text" id="new-member-project" placeholder="所属プロジェクト">
+                    <select id="new-member-expiry" required>
+                        <option value="">有効期限を選択</option>
+                        <option value="this-october">今年の10月末</option>
+                        <option value="next-april">来年の4月末</option>
+                    </select>
+                    <button type="submit">部員を追加</button>
+                </form>
+                <hr>
+                
+                <div class="panel-header">
+                    <h3>登録済み部員一覧</h3>
+                    <button id="export-excel-button">Excel形式で出力</button>
+                </div>
+                <div id="list-controls" class="panel-header">
+                    <input type="text" id="search-input" placeholder="名前, 学年, PJ, 年齢などで検索...">
+                    <select id="sort-select">
+                        <option value="name-asc">名前順 (昇順)</option>
+                        <option value="name-desc">名前順 (降順)</option>
+                        <option value="grade-asc">学年順 (昇順)</option>
+                        <option value="grade-desc">学年順 (降順)</option>
+                        <option value="age-asc">年齢順 (若い順)</option>
+                        <option value="age-desc">年齢順 (年上順)</option>
+                        <option value="project-asc">プロジェクト順</option>
+                        <option value="expiry-asc">有効期限が近い順</option>
+                        <option value="status">在室状況</option>
+                    </select>
+                </div>
+                <div id="bulk-action-panel" class="panel"
+                    style="display: none; background-color: #f0f4f8; margin-bottom: 15px; padding: 15px;">
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <strong id="selection-count">0件選択中</strong>
+                        <select id="bulk-action-select">
+                            <option value="">一括操作を選択</option>
+                            <option value="update-expiry">有効期限を更新</option>
+                            <option value="delete">削除</option>
+                        </select>
+                        <select id="bulk-expiry-select" style="display: none;">
+                            <option value="">期限を選択</option>
+                            <option value="this-october">今年の10月末</option>
+                            <option value="next-april">来年の4月末</option>
+                            <option value="expire-now">失効させる</option>
+                        </select>
+                        <button id="bulk-apply-button">適用</button>
+                    </div>
+                </div>
+                <div id="admin-member-list"></div>
+            </div>
+            
+            <div id="admin-management-panel" class="panel content-panel" style="display: none;">
+                <h2>管理者管理</h2>
+                <div class="settings-form"> 
+                    <div class="panel" style="background-color: #f9f9f9; border-color: #e0e0e0; margin-top: 20px;">
+                        <form id="add-admin-form">
+                            <div class="form-group">
+                                <h3 style="margin-top: 0;">新しい管理者を追加</h3>
+                                <input type="email" id="new-admin-email" placeholder="新しい管理者のメールアドレス" required>
+                            </div>
+                            <div class="form-group">
+                                <input type="password" id="new-admin-password" placeholder="初期パスワード (6文字以上)" required>
+                            </div>
+                            <button type="submit" id="add-admin-button">管理者として登録</button>
+                        </form>
+                    </div>
+                    <hr>
+                    <div class="form-group">
+                        <h3>登録済み管理者一覧</h3>
+                        <div id="admin-list">
+                            </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="activity-log-panel" class="panel content-panel" style="display: none;">
+                <h2>入退室ログ</h2>
+                <div id="activity-log-list"></div>
+            </div>
+
+            <div id="discord-integration-panel" class="panel content-panel" style="display: none;">
+                <h2>Discord連携設定</h2>
+                <form id="discord-settings-form" class="settings-form">
+                    <div class="form-group">
+                        <label>「部員」ロール自動付与</label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="discord-member-role-enabled">
+                            <label for="discord-member-role-enabled" class="slider"></label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>「部内」ロール自動付与</label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="discord-in-room-role-enabled">
+                            <label for="discord-in-room-role-enabled" class="slider"></label>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="form-group">
+                        <label for="discord-token">Discord Bot トークン</label>
+                        <input type="password" id="discord-token" placeholder="Botのトークン" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="discord-server-id">サーバーID</label>
+                        <input type="text" id="discord-server-id" placeholder="サーバーID" required pattern="^\d{17,19}$">
+                    </div>
+                    <div class="form-group">
+                        <label for="discord-member-role-id">「部員」ロールID</label>
+                        <input type="text" id="discord-member-role-id" placeholder="部員ロールのID" required pattern="^\d{17,19}$">
+                    </div>
+                    <div class="form-group">
+                        <label for="discord-in-room-role-id">「部内」ロールID</label>
+                        <input type="text" id="discord-in-room-role-id" placeholder="部内ロールのID" required pattern="^\d{17,19}$">
+                    </div>
+                    <button type="submit" id="save-discord-settings-button">Discord設定を保存</button>
+                </form>
+                <hr>
+                <div class="form-group">
+                    <label>手動同期</label>
+                    <p style="font-size: 0.9em; color: #666; margin-top:0;">現在の部員名簿の状態を、全メンバーのDiscordロールに強制的に反映させます。</p>
+                    <button type="button" id="manual-sync-button">今すぐ手動で同期する</button>
+                </div>
+            </div>
+
+            <div id="settings-panel" class="panel content-panel" style="display: none;">
+                <h2>設定</h2>
+                <form id="api-key-form">
+                    <label>部員名簿APIキー</label>
+                    <input type="text" id="api-key-display" placeholder="APIキーが設定されていません" readonly>
+                    <button type="button" id="update-api-key-button">新しいAPIキーを生成・更新</button>
+                </form>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+        import { getFunctions } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-functions.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyCrG5mdVZZ9hKNpdG5WlRMsxnU7l51k1gA",
+          authDomain: "iml-iot-sdkv9.firebaseapp.com",
+          projectId: "iml-iot-sdkv9",
+          storageBucket: "iml-iot-sdkv9.firebasestorage.app",
+          messagingSenderId: "454858659417",
+          appId: "1:454858659417:web:ba23b9ddd088a6af0c8348",
+          measurementId: "G-S163PEYCK0"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const functions = getFunctions(app, 'asia-northeast1');
+
+        import { initAdminPage } from './admin.js';
+        initAdminPage(auth, db, functions, window.XLSX);
+    </script>
+</body>
+</html>

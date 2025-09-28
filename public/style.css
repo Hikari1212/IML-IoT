@@ -1,0 +1,630 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: sans-serif;
+    padding: 20px;
+    background-color: #f4f4f9;
+    overflow-wrap: break-word;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+}
+
+.panel {
+    flex: 1;
+    min-width: 320px;
+    max-width: 800px;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+
+h2 {
+    color: #444;
+    border-bottom: 2px solid #5c6bc0;
+    padding-bottom: 10px;
+}
+
+/* --- グリッドレイアウト --- */
+#member-list, #current-members {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 15px;
+    padding-top: 10px;
+}
+
+#member-list .member, #current-members .member {
+    padding: 20px 10px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.1em;
+    color: white;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    word-break: break-all;
+}
+
+#member-list .member:hover, #current-members .member:hover {
+    transform: translateY(-3px);
+}
+
+.status-in {
+    background-color: #3f51b5;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.status-out {
+    background-color: #aaa;
+    color: #e0e0e0;
+}
+
+
+/* --- 管理ページ専用スタイル --- */
+#list-controls {
+    margin-bottom: 15px;
+    gap: 15px;
+}
+#search-input {
+    flex-grow: 1;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+#sort-select {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+
+#add-member-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+#add-member-form input, #add-member-form select, #add-member-form button {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+
+#add-member-form button {
+    background-color: #5c6bc0;
+    color: white;
+    cursor: pointer;
+    border: none;
+}
+
+/* ▼▼▼ ここにExcel関連ボタンのスタイルを追加 ▼▼▼ */
+#import-excel-button, #download-template-button, #export-excel-button, #bulk-apply-button {
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: none;
+    font-size: 14px;
+    background-color: #5c6bc0;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+#import-excel-button:hover, #download-template-button:hover, #export-excel-button:hover, #bulk-apply-button:hover {
+    background-color: #3f51b5;
+}
+
+
+/* 管理ページの部員一覧リスト */
+#admin-member-list .member {
+    text-align: left;
+    color: #333;
+    background-color: #fff;
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+#admin-member-list .member:hover {
+    background-color: #f9f9f9;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.member-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.summary-info {
+    flex: 1 1 200px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.summary-status {
+    flex: 1 1 200px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.9em;
+    color: #555;
+    text-align: right;
+}
+
+.summary-actions {
+    flex-shrink: 0;
+}
+
+.member-details {
+    display: none;
+    margin-top: 15px;
+    padding-top: 10px;
+    font-size: 0.9em;
+    color: #444;
+}
+.member-details p {
+    margin: 4px 0;
+}
+
+#admin-member-list .member.is-open .member-details {
+    display: block;
+}
+
+#admin-member-list .member.is-open {
+    background-color: #f7f8fc;
+    border-color: #c0c8e0;
+}
+
+#admin-member-list .member:has(.edit-view[style*="block"]) {
+    cursor: default;
+}
+
+.edit-view {
+    cursor: default;
+}
+
+#admin-member-list .delete-button,
+#admin-member-list .update-expiry-button {
+    margin-left: 5px;
+    padding: 5px 10px;
+    color: white;
+    background-color: #e53935;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#admin-member-list .update-expiry-button {
+    background-color: #1e88e5;
+}
+
+#admin-member-list .delete-button:hover {
+    background-color: #c62828;
+}
+#admin-member-list .update-expiry-button:hover {
+    background-color: #1565c0;
+}
+
+.member.expired {
+    background-color: #f5f5f5;
+    color: #9e9e9e;
+    border-color: #e0e0e0;
+}
+
+.member.expired strong, .member.expired small {
+    text-decoration: line-through;
+}
+
+/* --- 編集機能用の追加スタイル --- */
+.edit-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #ddd;
+}
+
+.edit-form input, .edit-form select {
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.edit-controls button {
+    margin-left: 5px;
+    padding: 5px 10px;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#admin-member-list .edit-button {
+    background-color: #ff9800;
+    margin-left: 5px;
+    padding: 5px 10px;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#admin-member-list .edit-button:hover {
+    background-color: #f57c00;
+}
+
+.save-button { background-color: #4caf50; }
+.save-button:hover { background-color: #388e3c; }
+
+.cancel-button { background-color: #757575; }
+.cancel-button:hover { background-color: #616161; }
+
+.status-text {
+    font-weight: bold;
+}
+
+.expiry-date {
+    font-weight: normal;
+}
+
+.member.expired .expiry-date {
+    color: #9e9e9e;
+}
+
+#kiosk-panel {
+    max-width: 95%;
+    padding: 15px;
+}
+
+.grade-display {
+    font-size: 0.8em;
+    font-weight: normal;
+    opacity: 0.9;
+    margin-top: 3px;
+}
+
+.member-header {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    font-weight: bold;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 5px;
+}
+.member-header span {
+    margin-left: 10px;
+}
+
+/* --- 入退室システム(kiosk)のタイル大型化スタイル --- */
+#member-list {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+#member-list .member {
+    font-size: 1.8em;
+    padding: 25px 10px;
+    font-weight: bold;
+}
+
+#member-list .member small {
+    font-size: 1.2em;
+    margin-top: 5px;
+}
+
+/* --- スマートフォン表示への対応 --- */
+@media (max-width: 768px) {
+    /* 全体の調整 */
+    body {
+        padding: 10px;
+    }
+    .panel {
+        padding: 15px;
+        min-width: 0; 
+    }
+    h1 { font-size: 1.8em; }
+    h2 { font-size: 1.3em; }
+
+    /* 在室状況・キオスク画面の調整 */
+    #current-members {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 12px;
+    }
+    #current-members .member {
+        padding: 12px 8px;
+        font-size: 1em;
+    }
+
+    /* 管理ページの調整 */
+    #add-member-form {
+        grid-template-columns: 1fr;
+    }
+    #list-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .member-summary {
+        gap: 8px 15px;
+    }
+    
+    .summary-info {
+        flex-basis: 100%;
+        order: 1;
+        min-width: 0;
+    }
+    
+    .summary-status {
+        flex-grow: 1;
+        justify-content: flex-start;
+        order: 2;
+        text-align: left;
+        min-width: 150px;
+    }
+    
+    .summary-actions {
+        order: 3;
+    }
+}
+
+/* --- Hamburger Menu & Side Nav --- */
+#hamburger-menu-button {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    width: 40px;
+    height: 35px;
+    cursor: pointer;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    padding: 5px;
+    box-sizing: border-box;
+}
+
+#hamburger-menu-button span {
+    display: block;
+    width: 100%;
+    height: 3px;
+    background-color: #333;
+    border-radius: 2px;
+    transition: all 0.3s ease-in-out;
+}
+
+#side-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 250px;
+    height: 100%;
+    background-color: #fff;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 1000;
+}
+
+#side-nav.open {
+    transform: translateX(0);
+}
+
+#side-nav ul {
+    list-style: none;
+    padding: 80px 0 20px 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+#side-nav li a {
+    display: block;
+    padding: 15px 20px;
+    text-decoration: none;
+    color: #333;
+    font-size: 1.1em;
+}
+
+#side-nav li a:hover {
+    background-color: #f4f4f9;
+}
+
+/* --- Activity Log List --- */
+#activity-log-list .log-item {
+    padding: 12px 10px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+#activity-log-list .log-item:nth-child(odd) {
+    background-color: #f9f9f9;
+}
+
+#activity-log-list .log-item .log-action-in { color: #3f51b5; font-weight: bold; }
+#activity-log-list .log-item .log-action-out { color: #a71818; font-weight: bold; }
+#activity-log-list .log-item .log-time { font-size: 0.9em; color: #666; white-space: nowrap; }
+
+.nav-bottom-links {
+    margin-top: auto;
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+}
+
+#logout-link {
+    color: #e53935;
+    font-weight: bold;
+}
+
+#logout-link:hover {
+    color: #c62828;
+    background-color: #fcebee;
+}
+
+/* --- 設定フォームスタイル --- */
+.settings-form .form-group {
+    margin-bottom: 20px;
+}
+.settings-form label, .settings-form h3 {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #333;
+}
+.settings-form input[type="text"],
+.settings-form input[type="password"],
+.settings-form input[type="email"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+}
+.settings-form input[type="number"],
+.settings-form select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+   
+.settings-form button, #manual-sync-button, #update-api-key-button {
+    padding: 10px 15px;
+    border-radius: 4px;
+    border: none;
+    font-size: 1em;
+    background-color: #5c6bc0;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.settings-form button:hover, #manual-sync-button:hover, #update-api-key-button:hover {
+    background-color: #3f51b5;
+}
+.settings-form .form-group p {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 0;
+}
+
+/* --- トグルスイッチ --- */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+    vertical-align: middle;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    /* ▼▼▼ 位置を修正 ▼▼▼ */
+    top: 0px; 
+    left: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+input:checked + .slider {
+    background-color: #3f51b5;
+}
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+/* --- ログイン画面のUI改善 --- */
+#login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh; /* 画面の高さに応じて中央に配置 */
+}
+
+#login-form {
+    text-align: center;
+}
+
+#login-form h2 {
+    margin-bottom: 25px;
+}
+
+#login-form input {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+#login-form button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 4px;
+    border: none;
+    font-size: 1.1em;
+    font-weight: bold;
+    background-color: #5c6bc0;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#login-form button:hover {
+    background-color: #3f51b5;
+}
