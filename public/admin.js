@@ -212,7 +212,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         stayDurationChart = renderChart(
             'stay-duration-chart',
             stayDurationChart,
-            '滞在時間 (時間)',
+            '滞在時間',
+            '時間 (Hours)', // 横軸の単位を追加
             sortedDurations.map(item => item[0]),
             sortedDurations.map(item => (item[1] / (1000 * 60 * 60)).toFixed(2))
         );
@@ -220,12 +221,13 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             'entry-count-chart',
             entryCountChart,
             '入室回数',
+            '回数 (Count)', // 横軸の単位を追加
             sortedEntries.map(item => item[0]),
             sortedEntries.map(item => item[1])
         );
     }
 
-    function renderChart(canvasId, chartInstance, label, labels, data) {
+    function renderChart(canvasId, chartInstance, datasetLabel, xAxisLabel, labels, data) {
         const container = document.getElementById(canvasId).parentElement;
         container.querySelector('p')?.remove();
         if (chartInstance) chartInstance.destroy();
@@ -236,7 +238,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: label,
+                    label: datasetLabel,
                     data: data,
                     backgroundColor: 'rgba(63, 81, 181, 0.5)',
                     borderColor: 'rgba(63, 81, 181, 1)',
@@ -245,8 +247,20 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             },
             options: {
                 indexAxis: 'y',
-                scales: { x: { beginAtZero: true } },
-                plugins: { legend: { display: false } }
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        title: { // x軸(横軸)のタイトル設定を追加
+                            display: true,
+                            text: xAxisLabel
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
             }
         });
     }
