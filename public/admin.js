@@ -2,7 +2,7 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.1/firebas
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import {
     collection, onSnapshot, query, where, doc, updateDoc, addDoc, serverTimestamp,
-    deleteDoc, getDocs, writeBatch, Timestamp, orderBy, limit
+    deleteDoc, getDocs, writeBatch, Timestamp, orderBy, limit, startAfter
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
 export function initAdminPage(auth, db, functions, XLSX) {
@@ -34,7 +34,16 @@ export function initAdminPage(auth, db, functions, XLSX) {
     const navLinkLogs = document.getElementById('nav-link-logs');
     const memberManagementPanel = document.getElementById('member-management-panel');
     const activityLogPanel = document.getElementById('activity-log-panel');
+
+    // --- 入退室ログ関連のDOM要素と状態変数 ---
     const activityLogListDiv = document.getElementById('activity-log-list');
+    const logPeriodSelect = document.getElementById('log-period-select');
+    const logPageSizeSelect = document.getElementById('log-page-size-select');
+    const logPrevButton = document.getElementById('log-prev-button');
+    const logNextButton = document.getElementById('log-next-button');
+    const logPageInfo = document.getElementById('log-page-info');
+    let logCurrentPage = 1;
+    let pageStartMarkers = [null]; // 各ページの開始点(Firestore Document)を格納
 
     // --- 検索・ソート機能のDOM要素 ---
     const searchInput = document.getElementById('search-input');
@@ -77,14 +86,15 @@ export function initAdminPage(auth, db, functions, XLSX) {
             mainContent.style.display = 'block';
             hamburgerButton.style.display = 'flex';
             loadAdminMemberList();
-            loadActivityLogs();
+            setupLogEventListeners(); // ログ画面のイベントリスナーを設定
+            loadActivityLogs();       // ログを初期表示
             loadAdminList();
             loadSettings();
         } else {
             loginForm.parentElement.style.display = 'flex';
             mainContent.style.display = 'none';
-            hamburgerButton.style.display = 'none'; // ★ハンバーガーメニューを非表示
-            sideNav.classList.remove('open'); // ログアウト時にサイドバーを閉じる
+            hamburgerButton.style.display = 'none';
+            sideNav.classList.remove('open');
         }
     });
 
@@ -106,7 +116,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
     });
 
     function showPanel(panelToShow) {
-        // Discordまたは設定ページを表示する際は、必ず設定を再読み込みする
         if (panelToShow === discordIntegrationPanel || panelToShow === settingsPanel) {
             loadSettings();
         }
@@ -119,7 +128,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
     navLinkAdmins.addEventListener('click', (e) => { e.preventDefault(); navigateWithDirtyCheck(adminManagementPanel); });
     navLinkLogs.addEventListener('click', (e) => { e.preventDefault(); navigateWithDirtyCheck(activityLogPanel); });
     navLinkSettings.addEventListener('click', (e) => { e.preventDefault(); navigateWithDirtyCheck(settingsPanel); });
-    // Discordページ自体への移動は、未保存チェックの対象外とし、常にリセットする
     navLinkDiscord.addEventListener('click', (e) => {
         e.preventDefault();
         showPanel(discordIntegrationPanel);
@@ -132,27 +140,19 @@ export function initAdminPage(auth, db, functions, XLSX) {
             const result = await getSettings();
             const settings = result.data || {};
 
-            // 各要素の存在を確認してから値を設定
             const memberRoleEnabledCheckbox = document.getElementById('discord-member-role-enabled');
             if (memberRoleEnabledCheckbox) memberRoleEnabledCheckbox.checked = settings.discordMemberRoleEnabled || false;
-
             const inRoomRoleEnabledCheckbox = document.getElementById('discord-in-room-role-enabled');
             if (inRoomRoleEnabledCheckbox) inRoomRoleEnabledCheckbox.checked = settings.discordInRoomRoleEnabled || false;
-
             const tokenInput = document.getElementById('discord-token');
             if (tokenInput) tokenInput.value = settings.discordBotToken || '';
-
             const serverIdInput = document.getElementById('discord-server-id');
             if (serverIdInput) serverIdInput.value = settings.discordServerId || '';
-
             const memberRoleIdInput = document.getElementById('discord-member-role-id');
             if (memberRoleIdInput) memberRoleIdInput.value = settings.discordMemberRoleId || '';
-
             const inRoomRoleIdInput = document.getElementById('discord-in-room-role-id');
             if (inRoomRoleIdInput) inRoomRoleIdInput.value = settings.discordInRoomRoleId || '';
-
             if (apiKeyDisplay) apiKeyDisplay.value = settings.memberApiKey || 'APIキーが設定されていません';
-
         } catch (error) {
             console.error("設定の読み込みに失敗:", error);
             alert(`設定の読み込みに失敗しました: ${error.message}`);
@@ -160,7 +160,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
     }
 
     // --- Discord連携ページ ---
-    // フォームに変更があったらフラグを立てる
     discordSettingsForm.addEventListener('input', () => {
         isDiscordFormDirty = true;
     });
@@ -181,7 +180,7 @@ export function initAdminPage(auth, db, functions, XLSX) {
         try {
             const updateDiscordSettings = httpsCallable(functions, 'updateDiscordSettings');
             await updateDiscordSettings(settings);
-            isDiscordFormDirty = false; // 保存成功でフラグをリセット
+            isDiscordFormDirty = false;
             alert('Discord設定を保存しました。');
         } catch (error) {
             alert(`保存に失敗しました: ${error.message}`);
@@ -191,10 +190,8 @@ export function initAdminPage(auth, db, functions, XLSX) {
         }
     });
 
-    // 手動同期ボタン
     manualSyncButton.addEventListener('click', async () => {
         if (!confirm('全ての部員のDiscordロールを現在の名簿情報に強制的に同期します。よろしいですか？\n(部員数が多い場合、処理に数分かかることがあります)')) return;
-
         manualSyncButton.disabled = true;
         manualSyncButton.textContent = '同期処理中...';
         try {
@@ -212,10 +209,7 @@ export function initAdminPage(auth, db, functions, XLSX) {
     // --- 設定ページ (APIキー) ---
     updateApiKeyButton.addEventListener('click', async () => {
         if (!confirm('新しいAPIキーを生成しますか？古いキーは上書きされ、使用できなくなります。')) return;
-
-        // 簡単なランダム文字列を生成する関数
         const generateRandomString = () => Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
-
         const newApiKey = generateRandomString();
         try {
             const updateApiKey = httpsCallable(functions, 'updateApiKey');
@@ -228,22 +222,19 @@ export function initAdminPage(auth, db, functions, XLSX) {
     });
 
     // --- 管理者管理機能 ---
-
     async function loadAdminList() {
         try {
             const listAdmins = httpsCallable(functions, 'listAdmins');
             const result = await listAdmins();
             const admins = result.data;
-
             adminListDiv.innerHTML = '';
             admins.forEach(admin => {
                 const isAdminSelf = admin.uid === auth.currentUser.uid;
+                const deleteButtonHtml = isAdminSelf ? '' : `<button class="delete-button" data-uid="${admin.uid}">削除</button>`;
                 adminListDiv.innerHTML += `
                     <div class="member" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; padding: 12px 15px;">
                         <span style="word-break: break-all;">${admin.email} ${isAdminSelf ? '<strong>(あなた)</strong>' : ''}</span>
-                        <div>
-                            <button class="delete-button" data-uid="${admin.uid}" ${isAdminSelf ? 'disabled' : ''}>削除</button>
-                        </div>
+                        <div>${deleteButtonHtml}</div>
                     </div>
                 `;
             });
@@ -256,7 +247,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
     adminListDiv.addEventListener('click', async (e) => {
         const target = e.target;
         const uid = target.dataset.uid;
-
         if (target.classList.contains('delete-button') && uid) {
             if (confirm('本当にこの管理者を削除しますか？この操作は取り消せません。')) {
                 target.disabled = true;
@@ -264,7 +254,7 @@ export function initAdminPage(auth, db, functions, XLSX) {
                     const deleteAdmin = httpsCallable(functions, 'deleteAdmin');
                     await deleteAdmin({ uid });
                     alert('管理者を削除しました。');
-                    loadAdminList(); // 一覧を再読み込み
+                    loadAdminList();
                 } catch (error) {
                     alert(`削除に失敗しました: ${error.message}`);
                     target.disabled = false;
@@ -277,16 +267,12 @@ export function initAdminPage(auth, db, functions, XLSX) {
         e.preventDefault();
         const email = document.getElementById('new-admin-email').value;
         const password = document.getElementById('new-admin-password').value;
-
         if (!confirm(`${email} を新しい管理者として登録しますか？`)) return;
-
         addAdminButton.disabled = true;
         addAdminButton.textContent = '登録処理中...';
-
         try {
             const addAdminFunction = httpsCallable(functions, 'addAdmin');
             const result = await addAdminFunction({ email, password });
-
             alert(result.data.result);
             addAdminForm.reset();
             loadAdminList();
@@ -299,8 +285,7 @@ export function initAdminPage(auth, db, functions, XLSX) {
         }
     });
 
-    // --- 部員管理機能  ---
-
+    // --- 部員管理機能 ---
     function loadAdminMemberList() {
         const q = query(membersCollection);
         onSnapshot(q, (snapshot) => {
@@ -327,7 +312,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
     function renderMemberList() {
         const searchTerm = searchInput.value.toLowerCase();
         const sortOption = sortSelect.value;
-
         let filteredMembers = allMembers.filter(member => {
             if (!searchTerm) return true;
             const name = member.name.toLowerCase();
@@ -337,7 +321,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
             const age = member.age ? member.age.toString() : '';
             return name.includes(searchTerm) || furigana.includes(searchTerm) || grade.includes(searchTerm) || project.includes(searchTerm) || age.includes(searchTerm);
         });
-
         filteredMembers.sort((a, b) => {
             const gradeOrder = { 'B1': 1, 'B2': 2, 'B3': 3, 'B4': 4, 'M1': 5, 'M2': 6 };
             switch (sortOption) {
@@ -359,14 +342,12 @@ export function initAdminPage(auth, db, functions, XLSX) {
                 default: return 0;
             }
         });
-
         adminMemberListDiv.innerHTML = `<div class="member-header"><input type="checkbox" id="select-all-checkbox"><span>メンバー情報</span></div>`;
         if (filteredMembers.length === 0) {
             adminMemberListDiv.innerHTML += '<p style="text-align: center; padding: 20px;">該当する部員はいません。</p>';
             updateSelection();
             return;
         }
-
         const checkedIds = new Set(Array.from(document.querySelectorAll('.member-checkbox:checked')).map(cb => cb.dataset.id));
         filteredMembers.forEach(member => {
             const statusText = member.isExpired ? '失効' : (member.status === 'in' ? '在室中' : '不在');
@@ -403,7 +384,7 @@ export function initAdminPage(auth, db, functions, XLSX) {
                             <input type="text" id="edit-furigana-${member.id}" value="${member.furigana || ''}" placeholder="読み仮名">
                             <input type="text" id="edit-studentid-${member.id}" value="${member.studentId || ''}" placeholder="学籍番号" pattern="[0-9]{7}" maxlength="7">
                             <input type="email" id="edit-email-${member.id}" value="${member.email || ''}" placeholder="メールアドレス">
-                            <input type="text" id="edit-discordid-${member.id}" value="${member.discordId || ''}" placeholder="DiscordユーザーID" pattern="^\\d{17,18}$" title="DiscordユーザーIDは17桁から18桁の数字で入力してください。">
+                            <input type="text" id="edit-discordid-${member.id}" value="${member.discordId || ''}" placeholder="DiscordユーザーID" pattern="^\\d{17,19}$" title="DiscordユーザーIDは17桁から19桁の数字で入力してください。">
                             <select id="edit-gender-${member.id}"><option value="男性" ${member.gender === '男性' ? 'selected' : ''}>男性</option><option value="女性" ${member.gender === '女性' ? 'selected' : ''}>女性</option><option value="その他" ${member.gender === 'その他' ? 'selected' : ''}>その他</option></select>
                             <input type="number" id="edit-age-${member.id}" value="${member.age || ''}" placeholder="年齢">
                             <select id="edit-grade-${member.id}"><option value="B1" ${member.grade === 'B1' ? 'selected' : ''}>学部1年</option><option value="B2" ${member.grade === 'B2' ? 'selected' : ''}>学部2年</option><option value="B3" ${member.grade === 'B3' ? 'selected' : ''}>学部3年</option><option value="B4" ${member.grade === 'B4' ? 'selected' : ''}>学部4年</option><option value="M1" ${member.grade === 'M1' ? 'selected' : ''}>修士1年</option><option value="M2" ${member.grade === 'M2' ? 'selected' : ''}>修士2年</option></select>
@@ -440,7 +421,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
         const expiryChoice = document.getElementById('new-member-expiry').value;
         const expiryDate = getExpiryDate(expiryChoice);
         if (!expiryDate) { alert('有効期限を選択してください。'); return; }
-
         await addDoc(membersCollection, {
             name: nameInput.value,
             furigana: document.getElementById('new-member-furigana').value,
@@ -459,7 +439,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
             createdAt: serverTimestamp(),
             lastUpdated: serverTimestamp()
         });
-
         addMemberForm.reset();
         alert(`${nameInput.value} さんを追加しました (キー: ${assignedKey})`);
     });
@@ -590,12 +569,10 @@ export function initAdminPage(auth, db, functions, XLSX) {
             selectedIds.forEach(id => batch.delete(doc(db, 'members', id)));
             await batch.commit();
             alert(`${selectedIds.length} 件の部員を削除しました。`);
-
         } else if (action === 'update-expiry') {
             const choice = bulkExpirySelect.value;
             if (!choice) { alert('更新後の有効期限を選択してください。'); return; }
             if (!confirm(`選択した ${selectedIds.length} 件の部員の有効期限を更新しますか？`)) return;
-
             if (choice === 'expire-now') {
                 selectedIds.forEach(id => {
                     batch.update(doc(db, 'members', id), { isExpired: true, expiryDate: null });
@@ -612,26 +589,17 @@ export function initAdminPage(auth, db, functions, XLSX) {
             await batch.commit();
             alert(`${selectedIds.length} 件の部員の有効期限を更新しました。`);
         }
-
         const selectAllCheckbox = document.getElementById('select-all-checkbox');
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
         renderMemberList();
     });
 
-    const excelHeaders = {
-        '名前': 'name', '読み仮名': 'furigana', '学籍番号': 'studentId',
-        'DiscordユーザーID': 'discordId', '学年': 'grade', '類': 'category',
-        '年齢': 'age', '性別': 'gender', 'メールアドレス': 'email',
-        '所属プロジェクト': 'project', '割り当てキー': 'assignedKey',
-        'ステータス': 'statusText', '有効期限': 'expiryDateStr', '失効': 'isExpired'
-    };
-
     const exampleRow = {
         '名前(必須)': '電通 太郎',
-        '読み仮名(必須)': 'デンツウ タロウ',
+        'フリガナ(必須)': 'デンツウ タロウ',
         '学籍番号(必須)': '2500001',
-        'DiscordユーザーID(必須)': '123456789012345678',
         'メールアドレス(必須)': 'taro.dentsu@example.com',
+        'DiscordユーザーID(必須)': '1234567890123456789',
         '性別': '男性',
         '年齢': 20,
         '学年': 'B3',
@@ -639,12 +607,8 @@ export function initAdminPage(auth, db, functions, XLSX) {
         '所属プロジェクト': 'IMLプロジェクト'
     };
 
-    const templateHeaders = [
-        '名前(必須)', '読み仮名(必須)', '学籍番号(必須)', 'DiscordユーザーID(必須)',
-        'メールアドレス(必須)', '性別', '年齢', '学年', '類', '所属プロジェクト'
-    ];
+    const templateHeaders = Object.keys(exampleRow);
 
-    // ▼▼▼ テンプレートダウンロードを更新 ▼▼▼
     downloadTemplateButton.addEventListener('click', () => {
         const worksheet = XLSX.utils.json_to_sheet([exampleRow], { header: templateHeaders });
         const workbook = XLSX.utils.book_new();
@@ -652,19 +616,11 @@ export function initAdminPage(auth, db, functions, XLSX) {
         XLSX.writeFile(workbook, '部員情報テンプレート.xlsx');
     });
 
-    // ▼▼▼ Excelエクスポートを更新 ▼▼▼
     const exportHeaders = [
-        '名前(必須)', '読み仮名(必須)', '学籍番号(必須)', 'DiscordユーザーID(必須)',
-        'メールアドレス(必須)', '性別', '年齢', '学年', '類', '所属プロジェクト',
+        '名前', 'フリガナ', '学籍番号', 'メールアドレス', 'DiscordユーザーID',
+        '性別', '年齢', '学年', '類', '所属プロジェクト',
         '割り当てキー', 'ステータス', '有効期限', '失効'
     ];
-    const exportKeys = {
-        '名前(必須)': 'name', '読み仮名(必須)': 'furigana', '学籍番号(必須)': 'studentId',
-        'DiscordユーザーID(必須)': 'discordId', 'メールアドレス(必須)': 'email',
-        '性別': 'gender', '年齢': 'age', '学年': 'grade', '類': 'category', '所属プロジェクト': 'project',
-        '割り当てキー': 'assignedKey', 'ステータス': 'statusText',
-        '有効期限': 'expiryDateStr', '失効': 'isExpired'
-    };
 
     importExcelButton.addEventListener('click', async () => {
         const file = excelFileInput.files[0];
@@ -690,16 +646,15 @@ export function initAdminPage(auth, db, functions, XLSX) {
 
                 for (const member of membersToImport) {
                     const name = member['名前(必須)'];
+                    const furigana = member['フリガナ(必須)'];
                     const studentId = String(member['学籍番号(必須)'] || '');
-                    const discordId = String(member['DiscordユーザーID(必須)'] || '');
                     const email = member['メールアドレス(必須)'];
-
-                    // ★ 必須項目のチェックを更新
-                    if (!name || !studentId || !discordId || !email) {
+                    const discordId = String(member['DiscordユーザーID(必須)'] || '');
+                    
+                    if (!name || !furigana || !studentId || !email || !discordId) {
                         missingFieldsCount++;
                         continue;
                     }
-
                     if (existingNames.has(name) || existingStudentIds.has(studentId)) {
                         duplicateCount++;
                         continue;
@@ -712,10 +667,10 @@ export function initAdminPage(auth, db, functions, XLSX) {
                     const newMemberRef = doc(membersCollection);
                     batch.set(newMemberRef, {
                         name: name,
-                        furigana: member['読み仮名(必須)'] || '',
+                        furigana: furigana,
                         studentId: studentId,
-                        discordId: discordId,
                         email: email,
+                        discordId: discordId,
                         gender: member['性別'] || '',
                         age: parseInt(member['年齢'], 10) || null,
                         grade: member['学年'] || '',
@@ -731,7 +686,6 @@ export function initAdminPage(auth, db, functions, XLSX) {
                     addedCount++;
                 }
                 await batch.commit();
-
                 alert(
                     `インポート完了。\n` +
                     `追加: ${addedCount}件\n` +
@@ -752,39 +706,83 @@ export function initAdminPage(auth, db, functions, XLSX) {
 
     exportExcelButton.addEventListener('click', async () => {
         if (allMembers.length === 0) return alert('エクスポートするデータがありません。');
-
-        const dataForExport = allMembers.map(member => {
-            const mapped = {};
-            // 動的なテキスト表現を事前に追加
-            member.statusText = member.isExpired ? '失効' : (member.status === 'in' ? '在室' : '不在');
-            member.expiryDateStr = member.expiryDate ? member.expiryDate.toDate().toLocaleDateString('ja-JP') : '';
-
-            // 定義したヘッダーの順番通りにデータをマッピング
-            for (const header of exportHeaders) {
-                const key = exportKeys[header]; // ヘッダー名から対応するデータキーを取得
-                mapped[header] = member[key] !== undefined ? member[key] : '';
-            }
-            return mapped;
-        });
-
-        // ヘッダーの順番を指定してワークシートを作成
+        const dataForExport = allMembers.map(member => ({
+            '名前': member.name,
+            'フリガナ': member.furigana,
+            '学籍番号': member.studentId,
+            'メールアドレス': member.email,
+            'DiscordユーザーID': member.discordId,
+            '性別': member.gender,
+            '年齢': member.age,
+            '学年': member.grade,
+            '類': member.category,
+            '所属プロジェクト': member.project,
+            '割り当てキー': member.assignedKey,
+            'ステータス': member.isExpired ? '失効' : (member.status === 'in' ? '在室' : '不在'),
+            '有効期限': member.expiryDate ? member.expiryDate.toDate().toLocaleDateString('ja-JP') : '',
+            '失効': member.isExpired
+        }));
         const worksheet = XLSX.utils.json_to_sheet(dataForExport, { header: exportHeaders });
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, '部員情報');
         XLSX.writeFile(workbook, '部員情報.xlsx');
     });
 
-    function loadActivityLogs() {
+    // --- 入退室ログ機能 ---
+    async function loadActivityLogs() {
+        if (!auth.currentUser) return;
+
+        logPrevButton.disabled = true;
+        logNextButton.disabled = true;
+        activityLogListDiv.innerHTML = '<p>ログを読み込んでいます...</p>';
+
+        const docsPerPage = parseInt(logPageSizeSelect.value, 10);
+        const period = logPeriodSelect.value;
         const logsCollection = collection(db, 'activity_logs');
-        const q = query(logsCollection, orderBy('timestamp', 'desc'), limit(200));
-        onSnapshot(q, (snapshot) => {
-            if (!activityLogListDiv) return;
+        let q = query(logsCollection, orderBy('timestamp', 'desc'));
+
+        // 期間フィルタ
+        const now = new Date();
+        let startDate;
+        if (period === '1m') startDate = new Date(now.setMonth(now.getMonth() - 1));
+        else if (period === '3m') startDate = new Date(now.setMonth(now.getMonth() - 3));
+        else if (period === '1y') startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+        if (startDate) {
+            q = query(q, where('timestamp', '>=', Timestamp.fromDate(startDate)));
+        }
+
+        // ページネーション
+        const startAfterDoc = pageStartMarkers[logCurrentPage - 1];
+        if (startAfterDoc) {
+            q = query(q, startAfter(startAfterDoc));
+        }
+        q = query(q, limit(docsPerPage + 1));
+
+        try {
+            const snapshot = await getDocs(q);
+            const docs = snapshot.docs;
+            let hasNextPage = false;
+            if (docs.length > docsPerPage) {
+                hasNextPage = true;
+                docs.pop();
+            }
+
+            // 次のページの開始点を記録
+            if (docs.length > 0) {
+                pageStartMarkers[logCurrentPage] = docs[docs.length - 1];
+            }
+
+            logPrevButton.disabled = logCurrentPage <= 1;
+            logNextButton.disabled = !hasNextPage;
+            logPageInfo.textContent = `ページ ${logCurrentPage}`;
+
+            // ログの描画
             activityLogListDiv.innerHTML = '';
             if (snapshot.empty) {
-                activityLogListDiv.innerHTML = '<p>ログはまだありません。</p>';
+                activityLogListDiv.innerHTML = '<p>該当するログはありません。</p>';
                 return;
             }
-            snapshot.forEach(docSnap => {
+            docs.forEach(docSnap => {
                 const log = docSnap.data();
                 const timestamp = log.timestamp ? log.timestamp.toDate() : new Date();
                 const formattedTime = `${timestamp.getFullYear()}/${String(timestamp.getMonth() + 1).padStart(2, '0')}/${String(timestamp.getDate()).padStart(2, '0')} ${String(timestamp.getHours()).padStart(2, '0')}:${String(timestamp.getMinutes()).padStart(2, '0')}`;
@@ -797,9 +795,34 @@ export function initAdminPage(auth, db, functions, XLSX) {
                     </div>
                 `;
             });
-        }, error => {
+        } catch (error) {
             console.error("ログの読み込みに失敗しました: ", error);
-            activityLogListDiv.innerHTML = '<p>エラーによりログを読み込めませんでした。</p>';
+            activityLogListDiv.innerHTML = `<p>エラーによりログを読み込めませんでした: ${error.message}</p>`;
+        }
+    }
+
+    function setupLogEventListeners() {
+        const handleFilterChange = () => {
+            logCurrentPage = 1;
+            pageStartMarkers = [null];
+            loadActivityLogs();
+        };
+
+        logPeriodSelect.addEventListener('change', handleFilterChange);
+        logPageSizeSelect.addEventListener('change', handleFilterChange);
+
+        logNextButton.addEventListener('click', () => {
+            if (!logNextButton.disabled) {
+                logCurrentPage++;
+                loadActivityLogs();
+            }
+        });
+
+        logPrevButton.addEventListener('click', () => {
+            if (!logPrevButton.disabled) {
+                logCurrentPage--;
+                loadActivityLogs();
+            }
         });
     }
 }
