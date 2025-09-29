@@ -15,6 +15,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const logoutLink = document.getElementById('logout-link');
     const addMemberForm = document.getElementById('add-member-form');
     const adminMemberListDiv = document.getElementById('admin-member-list');
+    const homeButton = document.getElementById('home-button'); 
     
     // --- Excel関連DOM要素 ---
     const excelFileInput = document.getElementById('excel-file-input');
@@ -44,12 +45,20 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     // --- ハンバーガーメニューとパネルのDOM要素 ---
     const hamburgerButton = document.getElementById('hamburger-menu-button');
     const sideNav = document.getElementById('side-nav');
+    const navLinkAllFeatures = document.getElementById('nav-link-all-features');
     const navLinkMembers = document.getElementById('nav-link-members');
     const navLinkLogs = document.getElementById('nav-link-logs');
     const navLinkHelp = document.getElementById('nav-link-help');
+    const allFeaturesPanel = document.getElementById('all-features-panel');
     const memberManagementPanel = document.getElementById('member-management-panel');
     const activityLogPanel = document.getElementById('activity-log-panel');
     const helpPanel = document.getElementById('help-panel');
+    const apiKeyPanel = document.getElementById('api-key-panel');
+    const biometricEnrollmentPanel = document.getElementById('biometric-enrollment-panel');
+    const biometricMemberSelect = document.getElementById('biometric-member-select');
+    const registerFingerprintButton = document.getElementById('register-fingerprint-button');
+    const registerFaceButton = document.getElementById('register-face-button');
+
 
     // --- 分析ページ関連 ---
     const navLinkAnalytics = document.getElementById('nav-link-analytics');
@@ -90,10 +99,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const manualSyncButton = document.getElementById('manual-sync-button');
 
     // --- その他設定 ---
-    const navLinkSettings = document.getElementById('nav-link-settings');
-    const settingsPanel = document.getElementById('settings-panel');
-    const apiKeyDisplay = document.getElementById('api-key-display');
     const updateApiKeyButton = document.getElementById('update-api-key-button');
+    const copyApiUrlButton = document.getElementById('copy-api-url-button'); // API URLコピーボタン
     let isDiscordFormDirty = false;
 
 
@@ -108,7 +115,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             loginForm.parentElement.style.display = 'flex';
             mainContent.style.display = 'none';
             hamburgerButton.style.display = 'none';
-            sideNav.classList.remove('open');
+            homeButton.style.display = 'none';
         }
     });
 
@@ -139,33 +146,61 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     });
 
     function showPanel(panelToShow) {
+        if (panelToShow === allFeaturesPanel) {
+            homeButton.style.display = 'none';
+        } else {
+            homeButton.style.display = 'flex';
+        }
+
+        if (panelToShow === biometricEnrollmentPanel) {
+            populateBiometricMemberSelect();
+        }
+        if (panelToShow === analyticsPanel && !analyticsDataLoaded) {
+            loadAnalyticsData();
+        }
+
         exportOptionsModal.style.display = 'none'; 
 
         if (isDiscordFormDirty && !confirm("未保存の変更があります。ページを移動しますか？")) return;
         isDiscordFormDirty = false;
-
-        if ((panelToShow === discordIntegrationPanel || panelToShow === settingsPanel)) loadSettings();
-        if (panelToShow === analyticsPanel && !analyticsDataLoaded) loadAnalyticsData();
 
         document.querySelectorAll('.content-panel').forEach(panel => panel.style.display = 'none');
         panelToShow.style.display = 'block';
         sideNav.classList.remove('open');
     }
 
+    // ナビゲーションイベントリスナー
+    navLinkAllFeatures.addEventListener('click', (e) => { e.preventDefault(); showPanel(allFeaturesPanel); });
     navLinkMembers.addEventListener('click', (e) => { e.preventDefault(); showPanel(memberManagementPanel); });
     navLinkAdmins.addEventListener('click', (e) => { e.preventDefault(); showPanel(adminManagementPanel); });
     navLinkLogs.addEventListener('click', (e) => { e.preventDefault(); showPanel(activityLogPanel); });
     navLinkAnalytics.addEventListener('click', (e) => { e.preventDefault(); showPanel(analyticsPanel); });
     navLinkDiscord.addEventListener('click', (e) => { e.preventDefault(); showPanel(discordIntegrationPanel); });
     navLinkHelp.addEventListener('click', (e) => { e.preventDefault(); showPanel(helpPanel); });
-    navLinkSettings.addEventListener('click', (e) => { e.preventDefault(); showPanel(settingsPanel); });
+
+    allFeaturesPanel.addEventListener('click', (e) => {
+        const card = e.target.closest('.feature-card');
+        if (!card) return;
+        const panelId = card.dataset.panel;
+        const panelToShow = document.getElementById(panelId);
+        if (panelToShow) {
+            showPanel(panelToShow);
+        }
+    });
+
+    homeButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPanel(allFeaturesPanel);
+    });
+
 
     async function loadSettings() {
         try {
             const getSettings = httpsCallable(functions, 'getSettings');
             const result = await getSettings();
             const settings = result.data || {};
-
+            const apiKeyDisplay = document.getElementById('api-key-display');
+            
             const memberRoleEnabledCheckbox = document.getElementById('discord-member-role-enabled');
             if (memberRoleEnabledCheckbox) memberRoleEnabledCheckbox.checked = settings.discordMemberRoleEnabled || false;
             const inRoomRoleEnabledCheckbox = document.getElementById('discord-in-room-role-enabled');
@@ -351,7 +386,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         }
     });
 
-    // --- 設定ページ (APIキー) ---
+    // --- APIキー管理ページ ---
     updateApiKeyButton.addEventListener('click', async () => {
         if (!confirm('新しいAPIキーを生成しますか？古いキーは上書きされ、使用できなくなります。')) return;
         const generateRandomString = () => Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
@@ -359,11 +394,25 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         try {
             const updateApiKey = httpsCallable(functions, 'updateApiKey');
             await updateApiKey({ apiKey: newApiKey });
-            apiKeyDisplay.value = newApiKey;
+            document.getElementById('api-key-display').value = newApiKey;
             alert('新しいAPIキーを生成・保存しました。');
         } catch (error) {
             alert(`更新に失敗しました: ${error.message}`);
         }
+    });
+
+    copyApiUrlButton.addEventListener('click', () => {
+        const urlToCopy = document.getElementById('api-endpoint-url');
+        navigator.clipboard.writeText(urlToCopy.value).then(() => {
+            const originalText = copyApiUrlButton.textContent;
+            copyApiUrlButton.textContent = 'コピーしました!';
+            setTimeout(() => {
+                copyApiUrlButton.textContent = originalText;
+            }, 2000);
+        }).catch(err => {
+            console.error('コピーに失敗しました', err);
+            alert('クリップボードへのコピーに失敗しました。');
+        });
     });
 
     // --- 管理者管理機能 ---
@@ -432,18 +481,14 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
     // --- 部員管理機能 ---
     function loadAdminMemberList() {
-        // 生体情報も同時にリッスン
         onSnapshot(query(collection(db, 'biometrics')), (bioSnapshot) => {
             biometricsMap = {};
             bioSnapshot.forEach(doc => {
                 const data = doc.data();
-                if (!biometricsMap[data.memberId]) {
-                    biometricsMap[data.memberId] = [];
-                }
+                if (!biometricsMap[data.memberId]) biometricsMap[data.memberId] = [];
                 biometricsMap[data.memberId].push(data.type);
             });
 
-            // membersのリッスンは生体情報取得後に実行
             onSnapshot(query(membersCollection), (memberSnapshot) => {
                 const now = new Date();
                 allMembers = [];
@@ -479,6 +524,22 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 option.textContent = project;
                 projectFilter.appendChild(option);
             }
+        });
+    }
+
+    function populateBiometricMemberSelect() {
+        biometricMemberSelect.innerHTML = '<option value="">登録する部員を選択してください</option>';
+        const activeMembers = allMembers.filter(m => !m.isExpired);
+        activeMembers.sort((a,b) => (a.furigana || a.name).localeCompare(b.furigana || b.name, 'ja'));
+
+        activeMembers.forEach(member => {
+            const memberBiometrics = biometricsMap[member.id] || [];
+            const fingerprintStatus = memberBiometrics.includes('fingerprint') ? ' (指紋登録済)' : '';
+            const faceStatus = memberBiometrics.includes('face') ? ' (顔登録済)' : '';
+            const option = document.createElement('option');
+            option.value = member.id;
+            option.textContent = `${member.name}${fingerprintStatus}${faceStatus}`;
+            biometricMemberSelect.appendChild(option);
         });
     }
 
@@ -561,26 +622,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             const isChecked = checkedIds.has(member.id) ? 'checked' : '';
             const keyInfo = member.isExpired ? '' : `キー[${member.assignedKey}] / `;
             
-            // 生体情報のステータス表示を生成
-            const memberBiometrics = biometricsMap[member.id] || [];
-            const hasFingerprint = memberBiometrics.includes('fingerprint');
-            const hasFace = memberBiometrics.includes('face');
-
-            const biometricHTML = `
-                <div class="biometric-info">
-                    <div class="biometric-status">
-                        <span class="status-label">指紋</span>
-                        <span class="status-text ${hasFingerprint ? 'status-registered' : 'status-not-registered'}">${hasFingerprint ? '登録済み' : '未登録'}</span>
-                        <button class="register-biometric-button" data-id="${member.id}" data-type="fingerprint" ${hasFingerprint ? 'disabled' : ''}>登録</button>
-                    </div>
-                    <div class="biometric-status">
-                        <span class="status-label">顔</span>
-                        <span class="status-text ${hasFace ? 'status-registered' : 'status-not-registered'}">${hasFace ? '登録済み' : '未登録'}</span>
-                        <button class="register-biometric-button" data-id="${member.id}" data-type="face" ${hasFace ? 'disabled' : ''}>登録</button>
-                    </div>
-                </div>
-            `;
-
             const html = `
                 <div class="${memberClass}" id="member-item-${member.id}">
                     <div class="member-summary">
@@ -604,7 +645,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                         <p><strong>メールアドレス:</strong> ${member.email || '未登録'}</p>
                         <p><strong>所属プロジェクト:</strong> ${member.project || '未定'}</p>
                         <p><strong>その他:</strong> ${keyInfo}${member.gender || ''} / ${member.grade || ''} / ${member.category || ''} / ${member.age || '?'}歳</p>
-                        ${biometricHTML}
                     </div>
                     <div class="edit-view" style="display:none;">
                         <div class="edit-form">
@@ -653,6 +693,38 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 topic.style.display = 'none';
             }
         });
+    });
+
+    const handleBiometricRegistration = async (biometricType) => {
+        const memberId = biometricMemberSelect.value;
+        if (!memberId) {
+            alert('部員を選択してください。');
+            return;
+        }
+
+        const typeText = biometricType === 'fingerprint' ? '指紋' : '顔';
+        const button = biometricType === 'fingerprint' ? registerFingerprintButton : registerFaceButton;
+
+        try {
+            button.textContent = 'トークン生成中...';
+            button.disabled = true;
+            const generateToken = httpsCallable(functions, 'generateEnrollmentToken');
+            const result = await generateToken({ memberId, biometricType });
+            
+            tokenDisplayText.textContent = result.data.token;
+            tokenDisplayModal.style.display = 'flex';
+        } catch (error) {
+            console.error("トークン生成エラー:", error);
+            alert(`エラー: ${error.message}`);
+        } finally {
+            button.textContent = `${typeText}を登録`;
+            button.disabled = false;
+        }
+    };
+    registerFingerprintButton.addEventListener('click', () => handleBiometricRegistration('fingerprint'));
+    registerFaceButton.addEventListener('click', () => handleBiometricRegistration('face'));
+    closeTokenModalButton.addEventListener('click', () => {
+        tokenDisplayModal.style.display = 'none';
     });
 
     addMemberForm.addEventListener('submit', async (e) => {
@@ -722,32 +794,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
     document.addEventListener('click', async (e) => {
         const target = e.target;
-        
-        // 生体情報登録ボタンの処理
-        if (target.classList.contains('register-biometric-button')) {
-            const memberId = target.dataset.id;
-            const biometricType = target.dataset.type;
-            const typeText = biometricType === 'fingerprint' ? '指紋' : '顔';
-            if (!confirm(`この部員の${typeText}情報を登録しますか？`)) return;
-
-            try {
-                target.textContent = 'トークン生成中...';
-                target.disabled = true;
-                const generateToken = httpsCallable(functions, 'generateEnrollmentToken');
-                const result = await generateToken({ memberId, biometricType });
-                
-                tokenDisplayText.textContent = result.data.token;
-                tokenDisplayModal.style.display = 'flex';
-            } catch (error) {
-                console.error("トークン生成エラー:", error);
-                alert(`エラー: ${error.message}`);
-            } finally {
-                target.textContent = '登録';
-                target.disabled = false;
-            }
-        }
-
-        if (target.matches('.member-checkbox, #select-all-checkbox')) return;
+        if (target.matches('.member-checkbox, #select-all-checkbox, .register-biometric-button')) return;
 
         const memberItem = target.closest('.member');
         if (!memberItem || !memberItem.id.startsWith('member-item-')) return;
@@ -823,11 +870,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         }
         memberItem.classList.toggle('is-open');
     });
-
-    closeTokenModalButton.addEventListener('click', () => {
-        tokenDisplayModal.style.display = 'none';
-    });
-
 
     adminMemberListDiv.addEventListener('change', (e) => {
         if (e.target.matches('select[id^="edit-expiry-"]')) {

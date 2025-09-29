@@ -416,24 +416,34 @@ h2 {
 #logout-link { color: #e53935; font-weight: bold; }
 #logout-link:hover { color: #c62828; background-color: #fcebee; }
 
-/* --- 設定フォームスタイル --- */
-.settings-form .form-group { margin-bottom: 20px; }
-.settings-form label, .settings-form h3 { display: block; margin-bottom: 8px; font-weight: bold; color: #333; }
-.settings-form input[type="text"],
-.settings-form input[type="password"],
-.settings-form input[type="email"],
-.settings-form input[type="number"],
-.settings-form select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+/* --- フォームの共通スタイル --- */
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #333; }
+.form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
    
-.settings-form button, #manual-sync-button, #update-api-key-button { padding: 10px 15px; border-radius: 4px; border: none; font-size: 1em; background-color: #5c6bc0; color: white; cursor: pointer; transition: background-color 0.2s; }
-.settings-form button:hover, #manual-sync-button:hover, #update-api-key-button:hover { background-color: #3f51b5; }
-.settings-form .form-group p { font-size: 0.9em; color: #666; margin-top: 0; }
+/* ▼▼▼ #save-discord-settings-button をセレクタに追加 ▼▼▼ */
+.form-group button, #manual-sync-button, #update-api-key-button, .biometric-actions button, #save-discord-settings-button {
+    padding: 10px 15px; border-radius: 4px; border: none; font-size: 1em; background-color: #5c6bc0; color: white; cursor: pointer; transition: background-color 0.2s;
+}
+.form-group button:hover, #manual-sync-button:hover, #update-api-key-button:hover, .biometric-actions button:hover, #save-discord-settings-button:hover {
+    background-color: #3f51b5;
+}
+.form-group p { font-size: 0.9em; color: #666; margin-top: 0; }
+
 
 /* --- トグルスイッチ --- */
 .toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; vertical-align: middle; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
-.slider:before { position: absolute; content: ""; height: 26px; width: 26px; top: 0px; left: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+.slider:before {
+    position: absolute; content: "";
+    height: 26px; width: 26px;
+    /* ▼▼▼ ご指定の通り top: 4px から 0px に修正 ▼▼▼ */
+    top: 0px; 
+    left: 4px;
+    background-color: white;
+    transition: .4s; border-radius: 50%;
+}
 input:checked + .slider { background-color: #3f51b5; }
 input:checked + .slider:before { transform: translateX(26px); }
 
@@ -447,8 +457,8 @@ input:checked + .slider:before { transform: translateX(26px); }
 
 /* --- モーダルウィンドウのスタイル --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; }
-.modal-content.panel { width: 90%; max-width: 500px; } /* panelクラスと共存させる */
-.modal-content h3 { color: #444; border-bottom: 2px solid #5c6bc0; padding-bottom: 10px; margin-top: 0; }
+.modal-content.panel { width: 90%; max-width: 500px; } 
+.modal-content h3 { color: #444; border-bottom: 2px solid #5c6bc0; padding-bottom: 10px; margin-top: 0; font-size: 1.3em; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; }
 .checkbox-grid label { display: flex; align-items: center; gap: 5px; }
@@ -470,61 +480,43 @@ input:checked + .slider:before { transform: translateX(26px); }
 .help-topic li { margin-bottom: 8px; }
 
 /* --- 外部リンクアイコンのスタイル --- */
-.external-link::after {
-    content: '';
-    display: inline-block;
-    width: 1em;
-    height: 1em;
-    margin-left: 0.4em;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'%3e%3c/path%3e%3cpolyline points='15 3 21 3 21 9'%3e%3c/polyline%3e%3cline x1='10' y1='14' x2='21' y2='3'%3e%3c/line%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-size: contain;
-    vertical-align: middle;
-}
+.external-link::after { content: ''; display: inline-block; width: 1em; height: 1em; margin-left: 0.4em; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'%3e%3c/path%3e%3cpolyline points='15 3 21 3 21 9'%3e%3c/polyline%3e%3cline x1='10' y1='14' x2='21' y2='3'%3e%3c/line%3e%3c/svg%3e"); background-repeat: no-repeat; background-size: contain; vertical-align: middle; }
 
-/* --- 生体情報登録エリアのスタイル --- */
-.biometric-info {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #eee;
-}
-.biometric-status {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-}
-.biometric-status .status-label {
-    font-weight: bold;
-}
-.biometric-status .status-text {
-    font-size: 0.9em;
-}
-.biometric-status .status-registered {
-    color: #4CAF50;
-    font-weight: bold;
-}
-.biometric-status .status-not-registered {
-    color: #9e9e9e;
-}
-.biometric-status button {
-    padding: 4px 8px;
-    font-size: 0.8em;
-}
+/* --- 「すべての機能」ページのスタイル --- */
+.feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-top: 20px; }
+.feature-card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; cursor: pointer; transition: box-shadow 0.2s, transform 0.2s; }
+.feature-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+.feature-card h3 { margin-top: 0; color: #3f51b5; }
+.feature-card p { font-size: 0.9em; color: #666; }
 
 /* --- トークン表示モーダルのスタイル --- */
-.token-display-box {
-    background-color: #f5f5f5;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 20px;
-    text-align: center;
-    margin: 20px 0;
+.token-display-box { background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 6px; padding: 20px; text-align: center; margin: 20px 0; }
+#token-display-text { font-family: monospace; font-size: 1.8em; font-weight: bold; color: #333; letter-spacing: 2px; }
+
+/* --- ホームに戻るボタンのスタイル --- */
+#home-button { position: fixed; top: 20px; right: 25px; z-index: 999; width: 50px; height: 50px; background-color: #5c6bc0; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); text-decoration: none; transition: background-color 0.2s, transform 0.2s; }
+#home-button:hover { background-color: #3f51b5; transform: scale(1.1); }
+#home-button svg { stroke: white; }
+
+/* --- APIキー管理画面のコピースタイル --- */
+.api-endpoint-wrapper { display: flex; gap: 10px; align-items: center; }
+.api-endpoint-wrapper input { flex-grow: 1; }
+#copy-api-url-button { padding: 10px 15px; border-radius: 4px; border: none; font-size: 1em; background-color: #78909c; color: white; cursor: pointer; transition: background-color 0.2s; }
+#copy-api-url-button:hover { background-color: #546e7a; }
+
+/* --- APIキー管理画面のレイアウト調整 --- */
+.api-key-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
-#token-display-text {
-    font-family: monospace;
-    font-size: 1.8em;
-    font-weight: bold;
-    color: #333;
-    letter-spacing: 2px;
+
+.api-key-wrapper input {
+    flex-grow: 1; /* 入力欄が伸びるように */
+}
+
+/* ボタンの文字が改行しないように設定 */
+#update-api-key-button, #copy-api-url-button {
+    white-space: nowrap;
+    flex-shrink: 0; /* ボタンが縮まないように */
 }
