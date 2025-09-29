@@ -465,7 +465,7 @@
                     <p style="font-size: 0.9em; color: #666; margin-top:0;">外部のプログラムから部員名簿の情報を安全に取得するためのAPIキーです。</p>
                     <div class="api-key-wrapper">
                         <input type="text" id="api-key-display" placeholder="APIキーが設定されていません" readonly>
-                        <button type="button" id="update-api-key-button">新しいAPIキーを生成</button>
+                        <button type="button" id="update-api-key-button" class="update-api-key-button">新しいAPIキーを生成</button>
                     </div>
                 </div>
                 <hr>
@@ -475,16 +475,16 @@
                     <div class="api-endpoint-wrapper">
                         <input type="text" id="api-endpoint-url"
                             value="https://asia-northeast1-iml-iot-sdkv9.cloudfunctions.net/getMemberListAPI" readonly>
-                        <button type="button" id="copy-api-url-button">コピー</button>
+                        <button type="button" id="copy-api-url-button" class="copy-api-url-button">コピー</button>
                     </div>
                 </div>
                 <hr>
                 <div class="form-group">
-                    <h3>顔認証APIキー</h3>
+                    <label>顔認証APIキー</label>
                     <p style="font-size: 0.9em; color: #666; margin-top:0;">外部のサービスから顔認証機能を利用するためのAPIキーです。</p>
                     <div class="api-key-wrapper">
                         <input type="text" id="face-verify-api-key-display" placeholder="APIキーが設定されていません" readonly>
-                        <button type="button" id="update-face-verify-api-key-button">新しいAPIキーを生成</button>
+                        <button type="button" id="update-face-verify-api-key-button" class="update-api-key-button">新しいAPIキーを生成</button>
                     </div>
                 </div>
                 <div class="form-group">
@@ -492,7 +492,7 @@
                     <div class="api-endpoint-wrapper">
                         <input type="text" id="face-verify-api-endpoint-url"
                             value="https://asia-northeast1-iml-iot-sdkv9.cloudfunctions.net/verifyFaceAPI" readonly>
-                        <button type="button" id="copy-face-verify-api-url-button">コピー</button>
+                        <button type="button" id="copy-face-verify-api-url-button" class="btn btn-secondary">コピー</button>
                     </div>
                 </div>
             </div>
@@ -503,9 +503,9 @@
         <div class="modal-content panel">
             <h3>Excelエクスポート設定</h3>
             <div class="form-group">
-                <label>
-                    <input type="checkbox" id="export-exclude-expired" checked>
+                <label class="checkbox-label-reverse">
                     失効した部員を除外する
+                    <input type="checkbox" id="export-exclude-expired" checked>
                 </label>
             </div>
             <div class="form-group">
@@ -514,8 +514,8 @@
                 </div>
             </div>
             <div class="modal-actions">
-                <button id="execute-export-button" class="save-button">エクスポート実行</button>
-                <button id="cancel-export-button" class="cancel-button">キャンセル</button>
+                <button id="execute-export-button" class="btn btn-primary">エクスポート実行</button>
+                <button id="cancel-export-button" class="btn btn-secondary">キャンセル</button>
             </div>
         </div>
     </div>
