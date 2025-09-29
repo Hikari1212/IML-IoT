@@ -101,6 +101,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     // --- その他設定 ---
     const updateApiKeyButton = document.getElementById('update-api-key-button');
     const copyApiUrlButton = document.getElementById('copy-api-url-button'); 
+    const updateFaceVerifyApiKeyButton = document.getElementById('update-face-verify-api-key-button');
+    const copyFaceVerifyApiUrlButton = document.getElementById('copy-face-verify-api-url-button');
     let isDiscordFormDirty = false;
 
     // 照合モード用のDOM要素を追加 ▼▼▼
@@ -316,6 +318,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             const result = await getSettings();
             const settings = result.data || {};
             const apiKeyDisplay = document.getElementById('api-key-display');
+            const faceVerifyApiKeyDisplay = document.getElementById('face-verify-api-key-display');
             
             const memberRoleEnabledCheckbox = document.getElementById('discord-member-role-enabled');
             if (memberRoleEnabledCheckbox) memberRoleEnabledCheckbox.checked = settings.discordMemberRoleEnabled || false;
@@ -330,6 +333,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             const inRoomRoleIdInput = document.getElementById('discord-in-room-role-id');
             if (inRoomRoleIdInput) inRoomRoleIdInput.value = settings.discordInRoomRoleId || '';
             if (apiKeyDisplay) apiKeyDisplay.value = settings.memberApiKey || 'APIキーが設定されていません';
+            if (faceVerifyApiKeyDisplay) faceVerifyApiKeyDisplay.value = settings.faceVerifyApiKey || 'APIキーが設定されていません';
         } catch (error) {
             console.error("設定の読み込みに失敗:", error);
             alert(`設定の読み込みに失敗しました: ${error.message}`);
@@ -517,6 +521,22 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         }
     });
 
+    updateFaceVerifyApiKeyButton.addEventListener('click', async () => {
+        if (!confirm('新しい「顔認証APIキー」を生成しますか？古いキーは使用できなくなります。')) return;
+        const generateRandomString = () => Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+        const newApiKey = generateRandomString();
+        try {
+            const updateApiKey = httpsCallable(functions, 'updateApiKey');
+            // keyType に 'faceVerifyApiKey' を指定
+            await updateApiKey({ apiKey: newApiKey, keyType: 'faceVerifyApiKey' });
+            document.getElementById('face-verify-api-key-display').value = newApiKey;
+            alert('新しいAPIキーを生成・保存しました。');
+        } catch (error) {
+            alert(`更新に失敗しました: ${error.message}`);
+        }
+    });
+
+
     copyApiUrlButton.addEventListener('click', () => {
         const urlToCopy = document.getElementById('api-endpoint-url');
         navigator.clipboard.writeText(urlToCopy.value).then(() => {
@@ -524,6 +544,20 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             copyApiUrlButton.textContent = 'コピーしました!';
             setTimeout(() => {
                 copyApiUrlButton.textContent = originalText;
+            }, 2000);
+        }).catch(err => {
+            console.error('コピーに失敗しました', err);
+            alert('クリップボードへのコピーに失敗しました。');
+        });
+    });
+
+    copyFaceVerifyApiUrlButton.addEventListener('click', () => {
+        const urlToCopy = document.getElementById('face-verify-api-endpoint-url');
+        navigator.clipboard.writeText(urlToCopy.value).then(() => {
+            const originalText = copyFaceVerifyApiUrlButton.textContent;
+            copyFaceVerifyApiUrlButton.textContent = 'コピーしました!';
+            setTimeout(() => {
+                copyFaceVerifyApiUrlButton.textContent = originalText;
             }, 2000);
         }).catch(err => {
             console.error('コピーに失敗しました', err);

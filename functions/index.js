@@ -75,12 +75,26 @@ exports.updateDiscordSettings = onCall(runtimeOpts, async (request) => {
 });
 
 exports.updateApiKey = onCall(runtimeOpts, async (request) => {
-  if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
+  if (!context.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
-  const {apiKey} = request.data;
-  await db.collection("settings").doc("config").set({memberApiKey: apiKey}, {merge: true});
-  return {result: "APIキーを更新しました。"};
+  // keyTypeでどのAPIキーを更新するか判断
+  const { apiKey, keyType } = request.data;
+  if (!apiKey || !keyType) {
+    throw new HttpsError("invalid-argument", "APIキーとキーの種類が必要です。");
+  }
+
+  let fieldToUpdate;
+  if (keyType === 'memberApiKey') {
+    fieldToUpdate = 'memberApiKey';
+  } else if (keyType === 'faceVerifyApiKey') {
+    fieldToUpdate = 'faceVerifyApiKey';
+  } else {
+    throw new HttpsError("invalid-argument", "無効なキーの種類です。");
+  }
+  
+  await db.collection("settings").doc("config").set({ [fieldToUpdate]: apiKey }, { merge: true });
+  return { result: "APIキーを更新しました。" };
 });
 
 // --- 部員名簿API ---
@@ -392,4 +406,81 @@ exports.identifyMemberByFace = onCall(runtimeOpts, async (request) => {
     }
   }
   return null;
+});
+
+// --- 顔認証API ---
+exports.verifyFaceAPI = onRequest(runtimeOpts, async (req, res) => {
+  const cors = require("cors")({ origin: true });
+  cors(req, res, async () => {
+    try {
+      // 1. 初期化が完了するのを待つ
+      await initializationPromise;
+
+      // 2. APIキーを検証
+      const settings = await getSettings();
+      const storedApiKey = settings.faceVerifyApiKey;
+      if (!storedApiKey) {
+        console.error("顔認証APIキーが設定されていません。");
+        return res.status(500).send({ error: "API key is not configured." });
+      }
+      const apiKey = req.headers["x-api-key"];
+      if (apiKey !== storedApiKey) {
+        return res.status(403).send({ error: "Forbidden" });
+      }
+
+      // 3. リクエストボディからdescriptorを取得
+      const { descriptor } = req.body;
+      if (!descriptor || !Array.isArray(descriptor) || descriptor.length !== 128) {
+        return res.status(400).send({ error: "Invalid descriptor data." });
+      }
+      
+      // 4. データベース内の顔情報と照合
+      const snapshot = await db.collection("biometrics").where("type", "==", "face").get();
+      if (snapshot.empty) {
+        return res.status(404).send({ error: "No face data registered." });
+      }
+
+      const queryDescriptor = new Float32Array(descriptor);
+      let bestMatch = { memberId: null, distance: 0.5 }; // 認証しきい値
+
+      for (const doc of snapshot.docs) {
+        const docData = doc.data();
+        if (docData.templateData && Array.isArray(docData.templateData)) {
+          const storedDescriptor = new Float32Array(docData.templateData);
+          const distance = faceapi.euclideanDistance(queryDescriptor, storedDescriptor);
+          if (distance < bestMatch.distance) {
+            bestMatch = { memberId: docData.memberId, distance: distance };
+          }
+        }
+      }
+
+      // 5. 最も一致した部員の情報を返す
+      if (bestMatch.memberId) {
+        const memberDoc = await db.collection("members").doc(bestMatch.memberId).get();
+        if (memberDoc.exists) {
+          const memberData = memberDoc.data();
+          // 失効している場合は認証失敗とする
+          if (memberData.isExpired) {
+            return res.status(200).json({ status: "fail", reason: "Member is expired." });
+          }
+          return res.status(200).json({ 
+            status: "success",
+            member: {
+              name: memberData.name,
+              grade: memberData.grade || "",
+              project: memberData.project || "",
+              status: memberData.status,
+            }
+          });
+        }
+      }
+      
+      // 6. 一致する部員が見つからなかった場合
+      return res.status(200).json({ status: "fail", reason: "No matching member found." });
+
+    } catch (error) {
+      console.error("顔認証APIでエラー:", error);
+      return res.status(500).send({ error: "Internal Server Error" });
+    }
+  });
 });

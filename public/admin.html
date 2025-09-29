@@ -478,6 +478,23 @@
                         <button type="button" id="copy-api-url-button">コピー</button>
                     </div>
                 </div>
+                <hr>
+                <div class="form-group">
+                    <h3>顔認証APIキー</h3>
+                    <p style="font-size: 0.9em; color: #666; margin-top:0;">外部のサービスから顔認証機能を利用するためのAPIキーです。</p>
+                    <div class="api-key-wrapper">
+                        <input type="text" id="face-verify-api-key-display" placeholder="APIキーが設定されていません" readonly>
+                        <button type="button" id="update-face-verify-api-key-button">新しいAPIキーを生成</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>顔認証APIエンドポイントURL</label>
+                    <div class="api-endpoint-wrapper">
+                        <input type="text" id="face-verify-api-endpoint-url"
+                            value="https://asia-northeast1-iml-iot-sdkv9.cloudfunctions.net/verifyFaceAPI" readonly>
+                        <button type="button" id="copy-face-verify-api-url-button">コピー</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
