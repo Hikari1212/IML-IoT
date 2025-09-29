@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="face-api.min.js"></script>
 </head>
 
 <body>
@@ -274,17 +275,38 @@
             </div>
 
             <div id="biometric-enrollment-panel" class="panel content-panel" style="display: none;">
-                <h2>生体情報登録</h2>
-                <p>部員を選択して、指紋または顔情報の登録トークンを生成します。</p>
-                <div class="form-group">
-                    <label for="biometric-member-select">部員を選択</label>
-                    <select id="biometric-member-select" required>
-                        <option value="">登録する部員を選択してください</option>
-                    </select>
+                <h2>生体情報管理</h2>
+                <div class="tab-buttons">
+                    <button id="enroll-tab-button" class="tab-button active">登録</button>
+                    <button id="verify-tab-button" class="tab-button">照合</button>
                 </div>
-                <div class="biometric-actions">
-                    <button id="register-fingerprint-button">指紋を登録</button>
-                    <button id="register-face-button">顔を登録</button>
+
+                <div id="enroll-mode">
+                    <p>部員を選択して、指紋または顔情報の登録トークンを生成します。</p>
+                    <div class="form-group">
+                        <label for="biometric-member-select">部員を選択</label>
+                        <select id="biometric-member-select" required>
+                            <option value="">登録する部員を選択してください</option>
+                        </select>
+                    </div>
+                    <div class="biometric-actions">
+                        <button id="register-fingerprint-button">指紋を登録</button>
+                        <button id="register-face-button">顔を登録</button>
+                    </div>
+                </div>
+
+                <div id="verify-mode" style="display: none;">
+                    <p>カメラに顔を向けてください。登録されている部員情報を検索します。</p>
+                    <div class="enrollment-container">
+                        <div class="camera-container">
+                            <video id="verify-video" width="600" height="450" autoplay muted></video>
+                            <div id="verify-face-overlay"></div>
+                        </div>
+                        <div class="verification-results">
+                            <p id="verify-status">カメラ準備中...</p>
+                            <div id="verify-result-card" style="display: none;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

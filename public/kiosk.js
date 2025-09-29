@@ -1,17 +1,13 @@
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc, getDocs, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
+// ▼▼▼ 外部から呼び出せるように export を追加 ▼▼▼
 export function initKioskPage(db) {
     const membersCollection = collection(db, 'members');
     const logsCollection = collection(db, 'activity_logs');
     const memberListDiv = document.getElementById('member-list');
 
-    // 処理中の操作を管理するSet（ドキュメントIDを格納）
     const processingActions = new Set();
 
-    /**
-     * 指定された部員のステータスを切り替える関数
-     * @param {string} docId - 部員のドキュメントID
-     */
     async function toggleMemberStatus(docId) {
         if (processingActions.has(docId)) {
             console.log("処理中のため無視:", docId);
@@ -57,8 +53,7 @@ export function initKioskPage(db) {
             }, 1000);
         }
     }
-
-    // --- メンバー一覧をリアルタイムで表示 ---
+    
     const q = query(membersCollection, orderBy('name'));
     onSnapshot(q, (snapshot) => {
         if (!memberListDiv) return;
@@ -78,8 +73,6 @@ export function initKioskPage(db) {
         });
     });
 
-
-    // --- クリックまたはタップ操作のリスナー ---
     if (memberListDiv) {
         memberListDiv.addEventListener('click', (event) => {
             const memberDiv = event.target.closest('.member');
@@ -91,15 +84,22 @@ export function initKioskPage(db) {
             }
         });
     }
-
-
-    // --- キーボード操作のリスナー ---
+    
     document.addEventListener('keydown', async (event) => {
+        // Enterキーの処理はkiosk.html側で行うため、ここでは何もしない
+        if (event.key === 'Enter') return;
         if (event.repeat) return;
+        
+        // 登録画面が表示されている場合はキー操作を無効にする
+        const enrollmentPanel = document.getElementById('enrollment-panel');
+        if (enrollmentPanel && enrollmentPanel.style.display !== 'none') {
+            return;
+        }
+
         const pressedKey = event.key.toLowerCase();
         try {
             const q = query(membersCollection, where('assignedKey', '==', pressedKey));
-            const snapshot = await getDocs(q); // このgetDocsが定義されていなかった
+            const snapshot = await getDocs(q);
 
             if (!snapshot.empty) {
                 const doc = snapshot.docs[0];
@@ -117,4 +117,25 @@ export function initKioskPage(db) {
             console.error("DB検索エラー:", error);
         }
     });
+}
+
+
+// --- ▼▼▼ 画面遷移用の関数を追加 ▼▼▼ ---
+export function showKioskPanel() {
+    document.getElementById('kiosk-panel').style.display = 'block';
+    document.getElementById('enrollment-panel').style.display = 'none';
+    const video = document.getElementById('video');
+    if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+    }
+}
+
+export function showEnrollmentPanel() {
+    document.getElementById('kiosk-panel').style.display = 'none';
+    document.getElementById('enrollment-panel').style.display = 'block';
+
+    // 登録画面が表示されたらカメラを起動
+    const event = new CustomEvent('start-camera');
+    document.dispatchEvent(event);
 }

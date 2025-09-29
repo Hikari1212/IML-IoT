@@ -1,40 +1,68 @@
-const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
-const {onDocumentWritten} = require("firebase-functions/v2/firestore");
-const {setGlobalOptions} = require("firebase-functions/v2");
+const functions = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 const axios = require("axios");
+const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {onRequest} = require("firebase-functions/v2/https");
+const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const path = require("path");
+
+// ▼▼▼ face-api.js と TensorFlow.js の初期化処理を修正 ▼▼▼
+const tf = require("@tensorflow/tfjs-core");
+require("@tensorflow/tfjs-backend-wasm");
+const faceapi = require("face-api.js");
+
+// 非同期の初期化処理をまとめる
+const modelsPath = path.join(__dirname, "weights");
+const initializationPromise = (async () => {
+  // 1. WASMバックエンドを設定し、準備が完了するまで待つ
+  await tf.setBackend("wasm");
+  await tf.ready();
+  console.log(`Using TensorFlow.js backend: ${tf.getBackend()}`);
+
+  // 2. face-api.jsに設定済みのtfインスタンスを教える (モンキーパッチ)
+  faceapi.env.monkeyPatch({tf});
+
+  // 3. バックエンド設定後にモデルを読み込む
+  await Promise.all([
+    faceapi.nets.faceRecognitionNet.loadFromDisk(modelsPath),
+    faceapi.nets.faceLandmark68Net.loadFromDisk(modelsPath),
+    faceapi.nets.ssdMobilenetv1.loadFromDisk(modelsPath),
+  ]);
+  console.log("Face-API models loaded for Node.js");
+})();
+// ▲▲▲ 初期化処理ここまで ▲▲▲
 
 admin.initializeApp();
 const db = admin.firestore();
 const auth = admin.auth();
 
-// 全ての関数のリージョンをアジア東北1（東京）に設定
-setGlobalOptions({region: "asia-northeast1"});
+// 関数の実行設定
+const runtimeOpts = {
+  timeoutSeconds: 60,
+  memory: "1GiB",
+  region: "asia-northeast1",
+};
 
+// (getSettings, updateDiscordSettingsなどの関数は変更なし)
 // --- 設定値を取得するためのヘルパー関数 ---
 async function getSettings() {
   const doc = await db.collection("settings").doc("config").get();
   return doc.exists ? doc.data() : {};
 }
 
-
 // --- 設定管理関数 ---
-
-// 全ての設定を取得する関数
-exports.getSettings = onCall({cors: true}, async (request) => {
+exports.getSettings = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
   return getSettings();
 });
 
-// Discord設定を更新する関数
-exports.updateDiscordSettings = onCall({cors: true}, async (request) => {
+exports.updateDiscordSettings = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
   const {discordMemberRoleEnabled, discordInRoomRoleEnabled, serverId, memberRoleId, inRoomRoleId, token} = request.data;
-
   await db.collection("settings").doc("config").set({
     discordMemberRoleEnabled: !!discordMemberRoleEnabled,
     discordInRoomRoleEnabled: !!discordInRoomRoleEnabled,
@@ -43,12 +71,10 @@ exports.updateDiscordSettings = onCall({cors: true}, async (request) => {
     discordInRoomRoleId: inRoomRoleId,
     discordBotToken: token,
   }, {merge: true});
-
   return {result: "Discord設定を更新しました。"};
 });
 
-// APIキーを更新する関数
-exports.updateApiKey = onCall({cors: true}, async (request) => {
+exports.updateApiKey = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
@@ -57,76 +83,71 @@ exports.updateApiKey = onCall({cors: true}, async (request) => {
   return {result: "APIキーを更新しました。"};
 });
 
-
 // --- 部員名簿API ---
-
-exports.getMemberListAPI = onRequest({cors: true}, async (req, res) => {
-  const settings = await getSettings();
-  const storedApiKey = settings.memberApiKey;
-
-  if (!storedApiKey) {
-    console.error("APIキーがFirestoreで設定されていません。");
-    res.status(500).send({error: "API key is not configured on the server."});
-    return;
-  }
-
-  const apiKey = req.headers["x-api-key"];
-  if (apiKey !== storedApiKey) {
-    console.warn("無効なAPIキーでAPIアクセスがありました。");
-    res.status(403).send({error: "Forbidden"});
-    return;
-  }
-
-  try {
-    const membersSnapshot = await db.collection("members")
-        .where("isExpired", "==", false)
-        .orderBy("name", "asc")
-        .get();
-
-    const memberList = membersSnapshot.docs.map((doc) => {
-      const data = doc.data();
-      const expiryDateISO = data.expiryDate ? data.expiryDate.toDate().toISOString() : null;
-      return {
-        name: data.name,
-        furigana: data.furigana || "",
-        grade: data.grade || "",
-        project: data.project || "",
-        status: data.status,
-        discordId: data.discordId || "",
-        email: data.email || "",
-        expiryDate: expiryDateISO,
-      };
-    });
-
-    res.status(200).send(memberList);
-  } catch (error) {
-    console.error("APIでのFirestoreデータ取得中にエラー:", error);
-    res.status(500).send({error: "Internal Server Error"});
-  }
+exports.getMemberListAPI = onRequest(runtimeOpts, async (req, res) => {
+  const cors = require("cors")({origin: true});
+  cors(req, res, async () => {
+    const settings = await getSettings();
+    const storedApiKey = settings.memberApiKey;
+    if (!storedApiKey) {
+      console.error("APIキーがFirestoreで設定されていません。");
+      res.status(500).send({error: "API key is not configured on the server."});
+      return;
+    }
+    const apiKey = req.headers["x-api-key"];
+    if (apiKey !== storedApiKey) {
+      console.warn("無効なAPIキーでAPIアクセスがありました。");
+      res.status(403).send({error: "Forbidden"});
+      return;
+    }
+    try {
+      const membersSnapshot = await db.collection("members")
+          .where("isExpired", "==", false)
+          .orderBy("name", "asc")
+          .get();
+      const memberList = membersSnapshot.docs.map((doc) => {
+        const memberData = doc.data();
+        const expiryDateISO = memberData.expiryDate ?
+          memberData.expiryDate.toDate().toISOString() : null;
+        return {
+          name: memberData.name,
+          furigana: memberData.furigana || "",
+          grade: memberData.grade || "",
+          project: memberData.project || "",
+          status: memberData.status,
+          discordId: memberData.discordId || "",
+          email: memberData.email || "",
+          expiryDate: expiryDateISO,
+        };
+      });
+      res.status(200).send(memberList);
+    } catch (error) {
+      console.error("APIでのFirestoreデータ取得中にエラー:", error);
+      res.status(500).send({error: "Internal Server Error"});
+    }
+  });
 });
 
-
 // --- Discord連携関数 ---
-
-exports.manageDiscordRoles = onDocumentWritten("members/{memberId}", async (event) => {
+exports.manageDiscordRoles = onDocumentWritten({
+  document: "members/{memberId}",
+  ...runtimeOpts,
+}, async (event) => {
   const settings = await getSettings();
   if (!settings.discordBotToken || !settings.discordServerId) {
     console.log("BotトークンまたはサーバーIDが未設定のため、自動同期をスキップしました。");
     return;
   }
-
   const discordApi = axios.create({
     baseURL: "https://discord.com/api/v10",
     headers: {Authorization: `Bot ${settings.discordBotToken}`},
   });
-
   const serverId = settings.discordServerId;
   const memberRoleId = settings.discordMemberRoleId;
   const inRoomRoleId = settings.discordInRoomRoleId;
   const before = event.data?.before.data();
   const after = event.data?.after.data();
 
-  // ドキュメント削除 or Discord IDなし
   if (!after || !after.discordId) {
     if (before && before.discordId) {
       console.log(`メンバー ${before.name} が削除されたため、ロールを剥奪します。`);
@@ -135,32 +156,23 @@ exports.manageDiscordRoles = onDocumentWritten("members/{memberId}", async (even
     }
     return;
   }
-
   const discordUserId = after.discordId;
-
-  // 「部員」ロール管理
   if (settings.discordMemberRoleEnabled && memberRoleId && (!before || before.isExpired !== after.isExpired)) {
     try {
       if (after.isExpired) {
-        console.log(`${after.name} が失効したため、「部員」ロールを剥奪。`);
         await discordApi.delete(`/guilds/${serverId}/members/${discordUserId}/roles/${memberRoleId}`);
       } else {
-        console.log(`${after.name} が有効なため、「部員」ロールを付与。`);
         await discordApi.put(`/guilds/${serverId}/members/${discordUserId}/roles/${memberRoleId}`);
       }
     } catch (e) {
       console.error("部員ロール更新失敗:", JSON.stringify(e.response?.data));
     }
   }
-
-  // 「部内」ロール管理
   if (settings.discordInRoomRoleEnabled && inRoomRoleId && (!before || before.status !== after.status)) {
     try {
       if (after.status === "in" && !after.isExpired) {
-        console.log(`${after.name} が入室したため、「部内」ロールを付与。`);
         await discordApi.put(`/guilds/${serverId}/members/${discordUserId}/roles/${inRoomRoleId}`);
       } else {
-        console.log(`${after.name} が退室または失効したため、「部内」ロールを剥奪。`);
         await discordApi.delete(`/guilds/${serverId}/members/${discordUserId}/roles/${inRoomRoleId}`);
       }
     } catch (e) {
@@ -169,33 +181,25 @@ exports.manageDiscordRoles = onDocumentWritten("members/{memberId}", async (even
   }
 });
 
-
-// ▼▼▼ 手動同期関数 ▼▼▼
-exports.manualSyncDiscordRoles = onCall({cors: true, timeoutSeconds: 300}, async (request) => {
+exports.manualSyncDiscordRoles = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
-
   const settings = await getSettings();
   if (!settings.discordBotToken || !settings.discordServerId) {
     throw new HttpsError("failed-precondition", "DiscordのBotトークンまたはサーバーIDが設定されていません。");
   }
-
   const discordApi = axios.create({
     baseURL: "https://discord.com/api/v10",
     headers: {Authorization: `Bot ${settings.discordBotToken}`},
   });
-
   const membersSnapshot = await db.collection("members").get();
   let successCount = 0;
   let errorCount = 0;
-
   for (const doc of membersSnapshot.docs) {
     const member = doc.data();
     if (!member.discordId) continue;
-
     try {
-      // 自動付与がオフでも、ロールIDがあれば同期する
       if (settings.discordMemberRoleId) {
         if (member.isExpired) {
           await discordApi.delete(`/guilds/${settings.discordServerId}/members/${member.discordId}/roles/${settings.discordMemberRoleId}`);
@@ -203,7 +207,6 @@ exports.manualSyncDiscordRoles = onCall({cors: true, timeoutSeconds: 300}, async
           await discordApi.put(`/guilds/${settings.discordServerId}/members/${member.discordId}/roles/${settings.discordMemberRoleId}`);
         }
       }
-      // 自動付与がオフでも、ロールIDがあれば同期する
       if (settings.discordInRoomRoleId) {
         if (member.status === "in" && !member.isExpired) {
           await discordApi.put(`/guilds/${settings.discordServerId}/members/${member.discordId}/roles/${settings.discordInRoomRoleId}`);
@@ -220,10 +223,8 @@ exports.manualSyncDiscordRoles = onCall({cors: true, timeoutSeconds: 300}, async
   return {result: `同期完了。成功: ${successCount}件, 失敗: ${errorCount}件`};
 });
 
-
 // --- 管理者CRUD関数 ---
-
-exports.addAdmin = onCall({cors: true}, async (request) => {
+exports.addAdmin = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
@@ -246,7 +247,7 @@ exports.addAdmin = onCall({cors: true}, async (request) => {
   }
 });
 
-exports.listAdmins = onCall({cors: true}, async (request) => {
+exports.listAdmins = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
@@ -257,7 +258,7 @@ exports.listAdmins = onCall({cors: true}, async (request) => {
   return adminUsers.filter((user) => user).map((user) => ({uid: user.uid, email: user.email}));
 });
 
-exports.updateAdmin = onCall({cors: true}, async (request) => {
+exports.updateAdmin = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
@@ -267,7 +268,7 @@ exports.updateAdmin = onCall({cors: true}, async (request) => {
   return {result: "管理者のメールアドレスを更新しました。"};
 });
 
-exports.deleteAdmin = onCall({cors: true}, async (request) => {
+exports.deleteAdmin = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
@@ -280,71 +281,115 @@ exports.deleteAdmin = onCall({cors: true}, async (request) => {
   return {result: "管理者を削除しました。"};
 });
 
-/**
- * 生体情報登録用のワンタイムトークンを生成する関数 (管理者専用)
- */
-exports.generateEnrollmentToken = onCall({cors: true}, async (request) => {
-  // 認証チェック: 管理者でなければエラー
+// --- 生体情報登録・削除関数 ---
+exports.generateEnrollmentToken = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
-
   const {memberId, biometricType} = request.data;
   if (!memberId || !biometricType) {
     throw new HttpsError("invalid-argument", "部員IDと種別が必要です。");
   }
-  if (!["fingerprint", "face"].includes(biometricType)) {
-    throw new HttpsError("invalid-argument", "種別は 'fingerprint' または 'face' である必要があります。");
-  }
-
-  // 5分後に失効するトークンを作成
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
   const tokenDoc = await db.collection("enrollment_tokens").add({
     memberId: memberId,
     type: biometricType,
-    // ▼▼▼ 修正点 ▼▼▼
     expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
   });
-
-  // ドキュメントIDをトークンとして返す
   return {token: tokenDoc.id};
 });
 
-
-/**
- * Raspberry Piから生体情報を受け取り登録する関数
- */
-exports.registerBiometric = onCall({cors: true}, async (request) => {
-  // 本番環境ではApp Check等でデバイス認証を行うことを強く推奨します
+exports.registerBiometric = onCall(runtimeOpts, async (request) => {
   const {token, templateData} = request.data;
   if (!token || !templateData) {
     throw new HttpsError("invalid-argument", "トークンとテンプレートデータが必要です。");
   }
-
   const tokenRef = db.collection("enrollment_tokens").doc(token);
   const tokenDoc = await tokenRef.get();
-
-  // トークンの検証
   if (!tokenDoc.exists) {
     throw new HttpsError("not-found", "無効なトークンです。");
   }
   const tokenData = tokenDoc.data();
   if (tokenData.expiresAt.toDate() < new Date()) {
-    await tokenRef.delete(); // 期限切れのトークンは削除
+    await tokenRef.delete();
     throw new HttpsError("deadline-exceeded", "トークンの有効期限が切れています。");
   }
-
-  // biometricsコレクションにデータを保存
   await db.collection("biometrics").add({
     memberId: tokenData.memberId,
     type: tokenData.type,
-    templateData: templateData, // ラズパイから送られてきた特徴データ
+    templateData: templateData,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-
-  // 使用済みトークンを削除
   await tokenRef.delete();
-
   return {result: `${tokenData.type} の登録が成功しました。`};
+});
+
+exports.deleteBiometric = onCall(runtimeOpts, async (request) => {
+  if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
+    throw new HttpsError("permission-denied", "権限がありません。");
+  }
+  const {memberId, biometricType} = request.data;
+  if (!memberId || !biometricType) {
+    throw new HttpsError("invalid-argument", "部員IDと種別が必要です。");
+  }
+  try {
+    const snapshot = await db.collection("biometrics")
+        .where("memberId", "==", memberId)
+        .where("type", "==", biometricType)
+        .get();
+    if (snapshot.empty) {
+      throw new HttpsError("not-found", "削除対象のデータが見つかりませんでした。");
+    }
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+    return {result: `${biometricType} の情報を削除しました。`};
+  } catch (error) {
+    console.error("生体情報の削除中にエラー:", error);
+    throw new HttpsError("internal", "データの削除に失敗しました。");
+  }
+});
+
+
+exports.identifyMemberByFace = onCall(runtimeOpts, async (request) => {
+  // ▼▼▼ 初期化が完了するのを待つ ▼▼▼
+  await initializationPromise;
+
+  if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
+    throw new HttpsError("permission-denied", "権限がありません。");
+  }
+  const {descriptor} = request.data;
+  if (!descriptor) {
+    throw new HttpsError("invalid-argument", "顔データが必要です。");
+  }
+  const snapshot = await db.collection("biometrics")
+      .where("type", "==", "face")
+      .get();
+  if (snapshot.empty) {
+    throw new HttpsError("not-found", "登録されている顔データがありません。");
+  }
+  const queryDescriptor = new Float32Array(descriptor);
+  let bestMatch = {memberId: null, distance: 0.5};
+  for (const doc of snapshot.docs) {
+    const docData = doc.data();
+    if (docData.templateData && Array.isArray(docData.templateData)) {
+      const storedDescriptor = new Float32Array(docData.templateData);
+      const distance = faceapi.euclideanDistance(queryDescriptor, storedDescriptor);
+      if (distance < bestMatch.distance) {
+        bestMatch = {memberId: docData.memberId, distance: distance};
+      }
+    }
+  }
+  if (bestMatch.memberId) {
+    const memberDoc = await db.collection("members").doc(bestMatch.memberId).get();
+    if (memberDoc.exists) {
+      return {
+        id: memberDoc.id,
+        ...memberDoc.data(),
+      };
+    }
+  }
+  return null;
 });

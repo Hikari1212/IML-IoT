@@ -100,9 +100,39 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
     // --- その他設定 ---
     const updateApiKeyButton = document.getElementById('update-api-key-button');
-    const copyApiUrlButton = document.getElementById('copy-api-url-button'); // API URLコピーボタン
+    const copyApiUrlButton = document.getElementById('copy-api-url-button'); 
     let isDiscordFormDirty = false;
 
+    // 照合モード用のDOM要素を追加 ▼▼▼
+    const enrollTabButton = document.getElementById('enroll-tab-button');
+    const verifyTabButton = document.getElementById('verify-tab-button');
+    const enrollModeDiv = document.getElementById('enroll-mode');
+    const verifyModeDiv = document.getElementById('verify-mode');
+    const verifyVideo = document.getElementById('verify-video');
+    const verifyStatus = document.getElementById('verify-status');
+    const verifyResultCard = document.getElementById('verify-result-card');
+    let verificationInterval = null; // 照合処理のインターバルID
+
+    let modelsLoaded = false;
+
+    // face-api.jsのモデルを非同期で読み込む関数
+    async function loadModels() {
+        if (modelsLoaded) return;
+        const MODEL_URL = '/weights'; // モデルファイルが置いてあるパス
+        try {
+            console.log("顔認識モデルの読み込みを開始します...");
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ]);
+            modelsLoaded = true;
+            console.log("顔認識モデルの読み込みが完了しました。");
+        } catch (error) {
+            console.error("モデルの読み込みに失敗しました:", error);
+            alert('顔認識モデルの読み込みに失敗しました。ページを再読み込みしてください。');
+        }
+    }
 
     // --- 認証処理 ---
     onAuthStateChanged(auth, user => {
@@ -146,6 +176,15 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     });
 
     function showPanel(panelToShow) {
+        if (panelToShow !== biometricEnrollmentPanel && verificationInterval) {
+            clearInterval(verificationInterval);
+            verificationInterval = null;
+            const stream = verifyVideo.srcObject;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                verifyVideo.srcObject = null;
+            }
+        }
         if (panelToShow === allFeaturesPanel) {
             homeButton.style.display = 'none';
         } else {
@@ -167,6 +206,83 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         document.querySelectorAll('.content-panel').forEach(panel => panel.style.display = 'none');
         panelToShow.style.display = 'block';
         sideNav.classList.remove('open');
+    }
+
+    // --- 生体情報登録・照合ページのイベントリスナー ---
+    enrollTabButton.addEventListener('click', () => {
+        enrollTabButton.classList.add('active');
+        verifyTabButton.classList.remove('active');
+        enrollModeDiv.style.display = 'block';
+        verifyModeDiv.style.display = 'none';
+        
+        // 照合処理を停止
+        if (verificationInterval) {
+            clearInterval(verificationInterval);
+            verificationInterval = null;
+        }
+        const stream = verifyVideo.srcObject;
+        if (stream) stream.getTracks().forEach(track => track.stop());
+    });
+
+    verifyTabButton.addEventListener('click', () => {
+        verifyTabButton.classList.add('active');
+        enrollTabButton.classList.remove('active');
+        verifyModeDiv.style.display = 'block';
+        enrollModeDiv.style.display = 'none';
+        startVerification();
+    });
+
+    async function startVerification() {
+        await loadModels();
+        verifyStatus.textContent = 'カメラ準備中...';
+        verifyResultCard.style.display = 'none';
+        
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+            verifyVideo.srcObject = stream;
+        } catch (err) {
+            verifyStatus.textContent = 'エラー: カメラの起動に失敗しました。';
+            return;
+        }
+
+        verifyStatus.textContent = '照合中... カメラに顔を向けてください。';
+
+        // 2秒ごとに顔を検出して照合
+        verificationInterval = setInterval(async () => {
+            const detection = await faceapi.detectSingleFace(verifyVideo, new faceapi.TinyFaceDetectorOptions())
+                                          .withFaceLandmarks()
+                                          .withFaceDescriptor();
+            
+            if (detection) {
+                verifyStatus.textContent = '顔を検出、サーバーで照合中...';
+                const templateData = Array.from(detection.descriptor);
+
+                try {
+                    const identifyMember = httpsCallable(functions, 'identifyMemberByFace');
+                    const result = await identifyMember({ descriptor: templateData });
+                    
+                    if (result.data) {
+                        const member = result.data;
+                        verifyStatus.textContent = '一致する部員が見つかりました！';
+                        verifyResultCard.innerHTML = `
+                            <h3>${member.name}</h3>
+                            <p><strong>学年:</strong> ${member.grade || '未設定'}</p>
+                            <p><strong>フリガナ:</strong> ${member.furigana || '未設定'}</p>
+                            <p><strong>ステータス:</strong> ${member.isExpired ? '失効' : (member.status === 'in' ? '在室中' : '不在')}</p>
+                        `;
+                        verifyResultCard.style.display = 'block';
+                        // 照合に成功したら一旦停止
+                        clearInterval(verificationInterval);
+                    } else {
+                        verifyStatus.textContent = '登録データに一致しません。照合中...';
+                        verifyResultCard.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error("照合エラー:", error);
+                    verifyStatus.textContent = `エラー: ${error.message}`;
+                }
+            }
+        }, 2000);
     }
 
     // ナビゲーションイベントリスナー
@@ -622,6 +738,25 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             const isChecked = checkedIds.has(member.id) ? 'checked' : '';
             const keyInfo = member.isExpired ? '' : `キー[${member.assignedKey}] / `;
             
+            const memberBiometrics = biometricsMap[member.id] || [];
+            const hasFingerprint = memberBiometrics.includes('fingerprint');
+            const hasFace = memberBiometrics.includes('face');
+
+            const biometricHTML = `
+                <div class="biometric-info">
+                    <div class="biometric-status">
+                        <span class="status-label">指紋</span>
+                        <span class="status-text ${hasFingerprint ? 'status-registered' : 'status-not-registered'}">${hasFingerprint ? '登録済み' : '未登録'}</span>
+                        ${hasFingerprint ? `<button class="delete-button delete-biometric-button" data-member-id="${member.id}" data-type="fingerprint">削除</button>` : ''}
+                    </div>
+                    <div class="biometric-status">
+                        <span class="status-label">顔</span>
+                        <span class="status-text ${hasFace ? 'status-registered' : 'status-not-registered'}">${hasFace ? '登録済み' : '未登録'}</span>
+                        ${hasFace ? `<button class="delete-button delete-biometric-button" data-member-id="${member.id}" data-type="face">削除</button>` : ''}
+                    </div>
+                </div>
+            `;
+
             const html = `
                 <div class="${memberClass}" id="member-item-${member.id}">
                     <div class="member-summary">
@@ -645,6 +780,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                         <p><strong>メールアドレス:</strong> ${member.email || '未登録'}</p>
                         <p><strong>所属プロジェクト:</strong> ${member.project || '未定'}</p>
                         <p><strong>その他:</strong> ${keyInfo}${member.gender || ''} / ${member.grade || ''} / ${member.category || ''} / ${member.age || '?'}歳</p>
+                        ${biometricHTML}
                     </div>
                     <div class="edit-view" style="display:none;">
                         <div class="edit-form">
@@ -794,7 +930,33 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
     document.addEventListener('click', async (e) => {
         const target = e.target;
-        if (target.matches('.member-checkbox, #select-all-checkbox, .register-biometric-button')) return;
+
+        // ▼▼▼ このブロックを新しく追加 ▼▼▼
+        // 生体情報削除ボタンの処理
+        if (target.classList.contains('delete-biometric-button')) {
+            const memberId = target.dataset.memberId;
+            const biometricType = target.dataset.type;
+            const typeText = biometricType === 'fingerprint' ? '指紋' : '顔';
+            
+            if (confirm(`本当にこの部員の${typeText}情報を削除しますか？`)) {
+                try {
+                    target.textContent = '削除中...';
+                    target.disabled = true;
+                    const deleteBiometric = httpsCallable(functions, 'deleteBiometric');
+                    await deleteBiometric({ memberId, biometricType });
+                    alert(`${typeText}情報を削除しました。`);
+                    // onSnapshotが自動でUIを更新するため、ここでは画面リロードは不要
+                } catch (error) {
+                    console.error("生体情報の削除エラー:", error);
+                    alert(`エラー: ${error.message}`);
+                    target.textContent = '削除';
+                    target.disabled = false;
+                }
+            }
+            return; // 他のクリックイベントと重複しないようにここで処理を終了
+        }
+        
+        if (target.matches('.member-checkbox, #select-all-checkbox')) return;
 
         const memberItem = target.closest('.member');
         if (!memberItem || !memberItem.id.startsWith('member-item-')) return;
@@ -861,9 +1023,9 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             return;
         }
 
-        if (target.classList.contains('delete-button')) {
+        if (target.classList.contains('delete-button') && target.dataset.id) { // 通常の部員削除
             if (confirm('本当にこの部員を削除しますか？')) {
-                await deleteDoc(doc(db, 'members', id));
+                await deleteDoc(doc(db, 'members', target.dataset.id));
                 alert('部員を削除しました。');
             }
             return;
