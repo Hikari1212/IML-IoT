@@ -1076,3 +1076,47 @@ input:checked + .slider:before { transform: translateX(26px); }
 .discord-rule .delete-rule-button:hover {
     background-color: #c62828;
 }
+
+/* --- キオスク画面をフルスクリーン表示にするためのスタイル --- */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    /*overflow: hidden;  ページ全体のスクロールを禁止 */
+}
+
+/* kiosk.htmlのbodyに限定して適用 */
+body:has(#kiosk-panel) {
+    padding: 10px; /* 少し余白を確保 */
+    overflow: hidden;
+}
+
+#kiosk-panel {
+    height: calc(100vh - 20px); /* 画面の高さから余白を引いたサイズ */
+    display: flex;
+    flex-direction: column;
+}
+
+#member-list {
+    flex-grow: 1; /* 利用可能な残りのスペースをすべて使う */
+    /* ↓ JavaScriptで上書きされるため、固定的な列指定は削除しても良い */
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    /* ↓ 新しく追加：行の高さを自動で均等に分割 */
+    grid-auto-rows: 1fr;
+}
+
+#member-list .member {
+    /* タイル内の文字サイズなどを微調整 */
+    font-size: 1.5em;
+    padding: 15px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* --- キオスク画面のタイルずれを修正 --- */
+.status-out {
+    /* 在室中タイルと描画方法を揃えるため、透明な影を追加 */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.0);
+}

@@ -38,6 +38,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     let pageStartMarkers = [null];
 
     // --- ここから関数定義 ---
+
     function populateBiometricMemberSelect() {
         const biometricMemberSelect = document.getElementById('biometric-member-select');
         biometricMemberSelect.innerHTML = '<option value="">登録する部員を選択してください</option>';
@@ -74,40 +75,19 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     function showPanel(panelToShow) {
         if (isDiscordFormDirty && !confirm("未保存の変更があります。ページを移動しますか？")) return;
         isDiscordFormDirty = false;
-
         stopAllBiometricProcesses();
         document.querySelectorAll('.content-panel').forEach(panel => panel.style.display = 'none');
         panelToShow.style.display = 'block';
-
         homeButton.style.display = (panelToShow === allFeaturesPanel) ? 'none' : 'flex';
         sideNav.classList.remove('open');
-
         if (panelToShow.id === 'biometric-enrollment-panel') populateBiometricMemberSelect();
         if (panelToShow.id === 'analytics-panel' && !analyticsDataLoaded) loadAnalyticsData();
         if (panelToShow.id === 'activity-log-panel') loadActivityLogs();
     }
-
-    // --- 認証状態の監視 ---
-    onAuthStateChanged(auth, user => {
-        const loginContainer = document.querySelector('.container');
-        if (user) {
-            loginContainer.style.display = 'none';
-            mainContent.style.display = 'block';
-            hamburgerButton.style.display = 'flex';
-            initializePage();
-        } else {
-            loginContainer.style.display = 'flex';
-            mainContent.style.display = 'none';
-            hamburgerButton.style.display = 'none';
-            homeButton.style.display = 'none';
-            stopAllBiometricProcesses();
-        }
-    });
-
+    
     // --- ページ全体の初期化 ---
     function initializePage() {
         setupNavigation();
-        setupLoginForm();
         initMemberManagement();
         initAdminManagement();
         initBiometricManagement();
@@ -117,12 +97,46 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         setupLogEventListeners();
         initHelp();
         retryButton.addEventListener('click', loadSettings);
-
         showPanel(allFeaturesPanel);
         loadSettings();
     }
+    
+    // --- ログイン機能 ---
+    function setupLoginForm() {
+        const loginButton = document.getElementById('login-button');
+        const logoutLink = document.getElementById('logout-link');
+        loginButton.addEventListener('click', () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            signInWithEmailAndPassword(auth, email, password)
+                .catch(error => alert('ログインに失敗しました: ' + error.message));
+        });
+        logoutLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            signOut(auth);
+        });
+    }
 
-    // --- face-api.js モデル読み込み ---
+    // --- メインの実行ロジック ---
+    setupLoginForm(); // ★修正点: ログインボタンの機能を先に有効化
+    onAuthStateChanged(auth, user => {
+        const loginContainer = document.querySelector('.container');
+        if (user) {
+            loginContainer.style.display = 'none';
+            mainContent.style.display = 'block';
+            hamburgerButton.style.display = 'flex';
+            initializePage(); // ログイン後にすべての管理機能を初期化
+        } else {
+            loginContainer.style.display = 'flex';
+            mainContent.style.display = 'none';
+            hamburgerButton.style.display = 'none';
+            homeButton.style.display = 'none';
+            stopAllBiometricProcesses();
+        }
+    });
+
+    // --- ここから先の関数は initializePage から呼び出される ---
+
     async function loadModels() {
         if (modelsLoaded) return;
         const MODEL_URL = '/weights';
@@ -141,11 +155,9 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         }
     }
 
-    // --- ナビゲーションとパネル表示 ---
     function setupNavigation() {
         hamburgerButton.addEventListener('click', () => sideNav.classList.toggle('open'));
         homeButton.addEventListener('click', (e) => { e.preventDefault(); showPanel(allFeaturesPanel); });
-
         const navLinks = {
             'nav-link-all-features': document.getElementById('all-features-panel'),
             'nav-link-members': document.getElementById('member-management-panel'),
@@ -155,7 +167,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             'nav-link-discord': document.getElementById('discord-integration-panel'),
             'nav-link-help': document.getElementById('help-panel')
         };
-
         for (const id in navLinks) {
             const link = document.getElementById(id);
             if(link) {
@@ -165,7 +176,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 });
             }
         }
-
         allFeaturesPanel.addEventListener('click', (e) => {
             const card = e.target.closest('.feature-card');
             if (card && card.dataset.panel) {
@@ -175,44 +185,23 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         });
     }
 
-    function showPanel(panelToShow) {
-        if (isDiscordFormDirty && !confirm("未保存の変更があります。ページを移動しますか？")) return;
-        isDiscordFormDirty = false;
-
-        stopAllBiometricProcesses();
-
-        document.querySelectorAll('.content-panel').forEach(panel => panel.style.display = 'none');
-        panelToShow.style.display = 'block';
-
-        homeButton.style.display = (panelToShow === allFeaturesPanel) ? 'none' : 'flex';
-        sideNav.classList.remove('open');
-
-        if (panelToShow.id === 'biometric-enrollment-panel') populateBiometricMemberSelect();
-        if (panelToShow.id === 'analytics-panel' && !analyticsDataLoaded) loadAnalyticsData();
-        if (panelToShow.id === 'activity-log-panel') loadActivityLogs();
-    }
-
     async function loadSettings() {
         errorOverlay.style.display = 'none';
         try {
             const getSettings = httpsCallable(functions, 'getSettings');
             const result = await getSettings();
             const settings = result.data || {};
-
             document.querySelector('#main-content .container').style.display = 'flex';
-
             const tokenInput = document.getElementById('discord-token');
             if (tokenInput) tokenInput.value = settings.discordBotToken || '';
             const serverIdInput = document.getElementById('discord-server-id');
             if (serverIdInput) serverIdInput.value = settings.discordServerId || '';
             discordRules = settings.discordRules || [];
             renderDiscordRules();
-
             const apiKeyDisplay = document.getElementById('api-key-display');
             if (apiKeyDisplay) apiKeyDisplay.value = settings.memberApiKey || 'APIキーが設定されていません';
             const faceVerifyApiKeyDisplay = document.getElementById('face-verify-api-key-display');
             if (faceVerifyApiKeyDisplay) faceVerifyApiKeyDisplay.value = settings.faceVerifyApiKey || 'APIキーが設定されていません';
-
             isDiscordFormDirty = false;
         } catch (error) {
             console.error("設定の読み込みに失敗:", error);
@@ -222,44 +211,21 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         }
     }
 
-    // --- ログイン機能 ---
-    function setupLoginForm() {
-        const loginButton = document.getElementById('login-button');
-        const logoutLink = document.getElementById('logout-link');
-
-        loginButton.addEventListener('click', () => {
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-            signInWithEmailAndPassword(auth, email, password)
-                .catch(error => alert('ログインに失敗しました: ' + error.message));
-        });
-
-        logoutLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            signOut(auth);
-        });
-    }
-
-    // --- Discord連携機能 ---
     function initDiscordManagement() {
         const discordSettingsForm = document.getElementById('discord-settings-form');
         const addDiscordRuleButton = document.getElementById('add-discord-rule-button');
         const manualSyncButton = document.getElementById('manual-sync-button');
-
         addDiscordRuleButton.addEventListener('click', () => {
             discordRules.push({ id: `rule_${Date.now()}`, enabled: true, property: 'status', value: 'in', roleId: '' });
             renderDiscordRules();
             isDiscordFormDirty = true;
         });
-
         discordSettingsForm.addEventListener('input', () => { isDiscordFormDirty = true; });
-
         discordSettingsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const saveButton = document.getElementById('save-discord-settings-button');
             saveButton.disabled = true;
             saveButton.textContent = '保存中...';
-
             const updatedRules = [];
             document.querySelectorAll('.discord-rule').forEach(ruleDiv => {
                 updatedRules.push({
@@ -271,13 +237,11 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 });
             });
             discordRules = updatedRules;
-
             const settings = {
                 discordBotToken: document.getElementById('discord-token').value,
                 discordServerId: document.getElementById('discord-server-id').value,
                 discordRules: discordRules
             };
-
             try {
                 const updateDiscordSettings = httpsCallable(functions, 'updateDiscordSettings');
                 await updateDiscordSettings(settings);
@@ -290,29 +254,25 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 saveButton.textContent = 'Discord設定を保存';
             }
         });
-        
-    manualSyncButton.addEventListener('click', async () => {
-        if (!confirm('全ての部員のDiscordロールを現在の名簿情報に強制的に同期しますか？\n(部員数が多い場合、処理に数分かかることがあります)')) return;
-        manualSyncButton.disabled = true;
-        manualSyncButton.textContent = '同期処理中...';
-        try {
-            // ▼▼▼ タイムアウトオプションを追加 ▼▼▼
-            const manualSync = httpsCallable(functions, 'manualSyncDiscordRoles', { timeout: 540000 }); // 540秒 (ミリ秒指定)
-            const result = await manualSync();
-            alert(result.data.result);
-        } catch (error) {
-            // タイムアウトエラーの場合に、より分かりやすいメッセージを表示
-            if (error.code === 'deadline-exceeded') {
-                alert('同期処理がタイムアウトしました。しばらく待ってから再度お試しください。');
-            } else {
-                alert(`同期に失敗しました: ${error.message}`);
+        manualSyncButton.addEventListener('click', async () => {
+            if (!confirm('全ての部員のDiscordロールを現在の名簿情報に強制的に同期しますか？\n(部員数が多い場合、処理に数分かかることがあります)')) return;
+            manualSyncButton.disabled = true;
+            manualSyncButton.textContent = '同期処理中...';
+            try {
+                const manualSync = httpsCallable(functions, 'manualSyncDiscordRoles', { timeout: 540000 });
+                const result = await manualSync();
+                alert(result.data.result);
+            } catch (error) {
+                if (error.code === 'deadline-exceeded') {
+                    alert('同期処理がタイムアウトしました。しばらく待ってから再度お試しください。');
+                } else {
+                    alert(`同期に失敗しました: ${error.message}`);
+                }
+            } finally {
+                manualSyncButton.disabled = false;
+                manualSyncButton.textContent = '今すぐ手動で同期する';
             }
-        } finally {
-            manualSyncButton.disabled = false;
-            manualSyncButton.textContent = '今すぐ手動で同期する';
-        }
-    });
-    
+        });
     }
 
     function renderDiscordRules() {
@@ -343,7 +303,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 <button type="button" class="delete-rule-button">削除</button>`;
             discordRulesContainer.appendChild(ruleDiv);
         });
-
         document.querySelectorAll('.delete-rule-button').forEach(button => {
             button.addEventListener('click', (e) => {
                 const ruleId = e.target.closest('.discord-rule').dataset.id;

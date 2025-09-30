@@ -1,117 +1,118 @@
+// kiosk.js の全内容をこのコードに置き換えてください
+
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc, getDocs, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
-// ▼▼▼ 外部から呼び出せるように export を追加 ▼▼▼
 export function initKioskPage(db) {
+    // --- DOM要素と定数の定義 ---
     const membersCollection = collection(db, 'members');
     const logsCollection = collection(db, 'activity_logs');
     const memberListDiv = document.getElementById('member-list');
+    const goToEnrollmentButton = document.getElementById('go-to-enrollment-button');
 
+    // --- 状態管理用の変数 ---
     const processingActions = new Set();
+    let currentMemberCount = 0;
 
-    async function toggleMemberStatus(docId) {
-        if (processingActions.has(docId)) {
-            console.log("処理中のため無視:", docId);
+    // --- ヘルパー関数 (initKioskPageスコープ内に配置) ---
+
+    // レイアウトを更新する関数
+    function updateGridLayout(numMembers) {
+        if (!memberListDiv || numMembers === 0) {
+            if (memberListDiv) memberListDiv.style.gridTemplateColumns = '1fr';
             return;
         }
+        currentMemberCount = numMembers;
+        const containerWidth = memberListDiv.clientWidth;
+        const containerHeight = memberListDiv.clientHeight;
+        if (containerHeight === 0) return; // 画面非表示時は計算しない
+        const aspectRatio = containerWidth / containerHeight;
+        const cols = Math.ceil(Math.sqrt(numMembers * aspectRatio));
+        memberListDiv.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    }
 
+    // 部員のステータスを更新する関数
+    async function toggleMemberStatus(docId) {
+        if (processingActions.has(docId)) return;
         processingActions.add(docId);
-        console.log("処理開始:", docId);
-
         try {
             const docRef = doc(db, 'members', docId);
             const docSnap = await getDoc(docRef);
-
             if (docSnap.exists()) {
                 const member = docSnap.data();
-                if (member.isExpired) {
-                    console.log("失効メンバーのため処理をスキップ:", member.name);
-                    return;
-                }
-                const currentStatus = member.status;
-                const newStatus = currentStatus === 'in' ? 'out' : 'in';
-
+                if (member.isExpired) return;
+                
+                const newStatus = member.status === 'in' ? 'out' : 'in';
                 await updateDoc(docRef, {
                     status: newStatus,
                     lastUpdated: serverTimestamp()
                 });
-                console.log("更新完了:", member.name, newStatus);
-
                 await addDoc(logsCollection, {
                     memberId: docId,
                     memberName: member.name,
                     action: newStatus,
                     timestamp: serverTimestamp()
                 });
-                console.log(`ログ記録: ${member.name} さんが ${newStatus === 'in' ? '入室' : '退室'}`);
             }
         } catch (error) {
             console.error("DB更新エラー:", error);
         } finally {
             setTimeout(() => {
                 processingActions.delete(docId);
-                console.log("ロック解除:", docId);
             }, 1000);
         }
     }
-    
+
+    // --- イベントリスナーとデータ監視のセットアップ ---
+
+    // Firestoreのデータ変更を監視
     const q = query(membersCollection, orderBy('name'));
     onSnapshot(q, (snapshot) => {
         if (!memberListDiv) return;
 
-        memberListDiv.innerHTML = '';
+        const activeMembers = [];
         snapshot.forEach(doc => {
-            const member = doc.data();
-            if (!member.isExpired) {
-                const statusClass = member.status === 'in' ? 'status-in' : 'status-out';
-                memberListDiv.innerHTML += `
-                    <div class="member ${statusClass}" data-id="${doc.id}" style="cursor: pointer;">
-                        <div>${member.name}</div>
-                        <small>(${member.assignedKey})</small>
-                    </div>
-                `;
+            if (!doc.data().isExpired) {
+                activeMembers.push({ id: doc.id, ...doc.data() });
             }
         });
+
+        memberListDiv.innerHTML = '';
+        activeMembers.forEach(member => {
+            const statusClass = member.status === 'in' ? 'status-in' : 'status-out';
+            memberListDiv.innerHTML += `
+                <div class="member ${statusClass}" data-id="${member.id}" style="cursor: pointer;">
+                    <div>${member.name}</div>
+                    <small>(${member.assignedKey})</small>
+                </div>`;
+        });
+        
+        updateGridLayout(activeMembers.length);
     });
 
+    // クリックイベント
     if (memberListDiv) {
         memberListDiv.addEventListener('click', (event) => {
             const memberDiv = event.target.closest('.member');
-            if (memberDiv) {
-                const docId = memberDiv.dataset.id;
-                if (docId) {
-                    toggleMemberStatus(docId);
-                }
+            if (memberDiv && memberDiv.dataset.id) {
+                toggleMemberStatus(memberDiv.dataset.id);
             }
         });
     }
     
+    // キーボードイベント
     document.addEventListener('keydown', async (event) => {
-        // Enterキーの処理はkiosk.html側で行うため、ここでは何もしない
-        if (event.key === 'Enter') return;
-        if (event.repeat) return;
-        
-        // 登録画面が表示されている場合はキー操作を無効にする
+        if (event.key === 'Enter' || event.repeat) return;
         const enrollmentPanel = document.getElementById('enrollment-panel');
-        if (enrollmentPanel && enrollmentPanel.style.display !== 'none') {
-            return;
-        }
+        if (enrollmentPanel && enrollmentPanel.style.display !== 'none') return;
 
-        const pressedKey = event.key.toLowerCase();
         try {
-            const q = query(membersCollection, where('assignedKey', '==', pressedKey));
+            const q = query(membersCollection, where('assignedKey', '==', event.key.toLowerCase()));
             const snapshot = await getDocs(q);
-
             if (!snapshot.empty) {
                 const doc = snapshot.docs[0];
-                const member = doc.data();
-
-                if (member.isExpired) {
-                    console.log("失効メンバーのため処理をスキップ:", member.name);
-                    return;
+                if (!doc.data().isExpired) {
+                    toggleMemberStatus(doc.id);
                 }
-                toggleMemberStatus(doc.id);
-            } else {
-                console.log("該当メンバーなし:", pressedKey);
             }
         } catch (error) {
             console.error("DB検索エラー:", error);
@@ -119,22 +120,25 @@ export function initKioskPage(db) {
     });
 
     // 顔登録ボタンのイベントリスナー
-    const goToEnrollmentButton = document.getElementById('go-to-enrollment-button');
     if (goToEnrollmentButton) {
         goToEnrollmentButton.addEventListener('click', (e) => {
             e.preventDefault();
-            showEnrollmentPanel(); // 既存の画面遷移関数を呼び出す
+            showEnrollmentPanel();
         });
     }
+
+    // ウィンドウリサイズイベント
+    window.addEventListener('resize', () => {
+        updateGridLayout(currentMemberCount);
+    });
 }
 
-
-// --- ▼▼▼ 画面遷移用の関数を追加 ▼▼▼ ---
+// --- 画面遷移用の関数 ---
 export function showKioskPanel() {
     document.getElementById('kiosk-panel').style.display = 'block';
     document.getElementById('enrollment-panel').style.display = 'none';
     const video = document.getElementById('video');
-    if (video.srcObject) {
+    if (video && video.srcObject) {
         video.srcObject.getTracks().forEach(track => track.stop());
         video.srcObject = null;
     }
@@ -143,8 +147,6 @@ export function showKioskPanel() {
 export function showEnrollmentPanel() {
     document.getElementById('kiosk-panel').style.display = 'none';
     document.getElementById('enrollment-panel').style.display = 'block';
-
-    // 登録画面が表示されたらカメラを起動
     const event = new CustomEvent('start-camera');
     document.dispatchEvent(event);
 }
