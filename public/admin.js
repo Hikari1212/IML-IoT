@@ -24,6 +24,9 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const errorMessage = document.getElementById('error-message');
     const retryButton = document.getElementById('retry-button');
 
+    // ▼▼▼【今回の修正点 1】変数を共通の親スコープに定義 ▼▼▼
+    const exportableColumns = { '名前': 'name', 'フリガナ': 'furigana', '学籍番号': 'studentId', 'メールアドレス': 'email', 'DiscordユーザーID': 'discordId', '性別': 'gender', '年齢': 'age', '学年': 'grade', '類': 'category', '所属プロジェクト': 'project', '役職': 'roles', '割り当てキー': 'assignedKey', 'ステータス': 'status', '有効期限': 'expiryDate', '失効': 'isExpired' };
+
     // --- 状態管理用の変数 ---
     let allMembers = [];
     let biometricsMap = {};
@@ -1153,6 +1156,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         const exportColumnSelectionDiv = document.getElementById('export-column-selection');
         const exportExcludeExpiredCheckbox = document.getElementById('export-exclude-expired');
         
+        // ▼▼▼【今回の修正点 2】ここにあった exportableColumns の定義を削除 ▼▼▼
+
         const templateHeaders = { '名前(必須)': 'name', 'フリガナ(必須)': 'furigana', '学籍番号(必須)': 'studentId', 'メールアドレス(必須)': 'email', 'DiscordユーザーID(必須)': 'discordId', '性別': 'gender', '年齢': 'age', '学年': 'grade', '類': 'category', '所属プロジェクト': 'project' };
 
         populateExportColumnSelection();
@@ -1304,7 +1309,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
     function populateExportColumnSelection() {
         const exportColumnSelectionDiv = document.getElementById('export-column-selection');
-        const exportableColumns = { '名前': 'name', 'フリガナ': 'furigana', '学籍番号': 'studentId', 'メールアドレス': 'email', 'DiscordユーザーID': 'discordId', '性別': 'gender', '年齢': 'age', '学年': 'grade', '類': 'category', '所属プロジェクト': 'project', '役職': 'roles', '割り当てキー': 'assignedKey', 'ステータス': 'status', '有効期限': 'expiryDate', '失効': 'isExpired' };
+        // ▼▼▼【今回の修正点 3】ここにあった exportableColumns の定義を削除 ▼▼▼
         exportColumnSelectionDiv.innerHTML = '';
         for (const displayName in exportableColumns) {
             const key = exportableColumns[displayName];

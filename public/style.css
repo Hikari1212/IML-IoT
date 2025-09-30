@@ -439,8 +439,9 @@ h2 {
     
     /* 編集フォームの入力欄 */
     .edit-form {
-        grid-template-columns: 1fr;
-        max-width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 8px; /* 各入力欄の間隔 */
     }
     
     .edit-form input,
@@ -580,8 +581,7 @@ h2 {
 .slider:before {
     position: absolute; content: "";
     height: 26px; width: 26px;
-    /* ▼▼▼ ご指定の通り top: 4px から 0px に修正 ▼▼▼ */
-    top: 0px; 
+    top: 4px; 
     left: 4px;
     background-color: white;
     transition: .4s; border-radius: 50%;
