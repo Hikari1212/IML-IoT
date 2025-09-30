@@ -76,6 +76,8 @@ export function initKioskPage(db) {
             }
         });
 
+        const memberCountHasChanged = activeMembers.length !== currentMemberCount;
+
         memberListDiv.innerHTML = '';
         activeMembers.forEach(member => {
             const statusClass = member.status === 'in' ? 'status-in' : 'status-out';
@@ -86,7 +88,9 @@ export function initKioskPage(db) {
                 </div>`;
         });
         
-        updateGridLayout(activeMembers.length);
+        if (memberCountHasChanged) {
+            updateGridLayout(activeMembers.length);
+        }
     });
 
     // クリックイベント

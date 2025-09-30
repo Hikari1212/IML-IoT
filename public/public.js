@@ -24,10 +24,12 @@ export function initPublicPage(db) {
                 // 表示
                 members.forEach(member => {
                     // グリッド用のHTML要素に学年を追加
+                    const projectDisplay = member.project || '';
                     currentMembersDiv.innerHTML += `
                         <div class="member status-in">
                             <div>${member.name}</div>
                             <small class="grade-display">${member.grade || ''}</small>
+                            <small class="project-display">${projectDisplay}</small>
                         </div>
                     `;
                 });

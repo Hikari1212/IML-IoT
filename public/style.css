@@ -343,53 +343,164 @@ h2 {
 
 /* --- スマートフォン表示への対応 --- */
 @media (max-width: 768px) {
-    body { padding: 10px; }
-    .panel { padding: 15px; min-width: 0; }
-    h1 { font-size: 1.8em; }
-    h2 { font-size: 1.3em; }
-
-    #current-members {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 12px;
-    }
-    #current-members .member { padding: 12px 8px; font-size: 1em; }
-
-    #add-member-form { grid-template-columns: 1fr; }
-    #list-controls { flex-direction: column; align-items: stretch; }
-    .member-summary { gap: 8px 15px; }
-    .summary-info { flex-basis: 100%; order: 1; min-width: 0; }
-    .summary-status { flex-grow: 1; justify-content: flex-start; order: 2; text-align: left; min-width: 150px; }
-    .summary-actions { order: 3; }
-
-    /* ▼▼▼ ここから追加・修正 ▼▼▼ */
-
-    /* --- Excelエクスポート画面のスマホ対応 --- */
-    .modal-content.panel {
-        max-width: 95vw; /* 画面幅の95%を最大幅に設定 */
-    }
-
-    .checkbox-grid {
-        grid-template-columns: 1fr; /* 項目を1列で表示 */
+    /* フォーム全体を縦並びにし、横幅を制限 */
+    #add-member-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 100%;
     }
     
-    /* --- 顔認証照合画面のスマホ対応 --- */
-    .enrollment-container {
-        flex-direction: column; /* 要素を縦に並べる */
-    }
-
-    .camera-container, .verification-results {
-        width: 100%; /* 幅を画面いっぱいに */
-        max-width: none;
-    }
-    
-    .camera-container {
-        height: auto; /* 高さを自動に */
-        aspect-ratio: 4 / 3; /* アスペクト比を4:3で維持 */
-    }
-
-    #video, #verify-video {
+    /* 各入力フィールドの幅を画面幅に合わせる */
+    #add-member-form input,
+    #add-member-form select,
+    #add-member-form button {
         width: 100%;
-        height: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* 役職チェックボックスグループの調整 */
+    .form-group.full-width {
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    .checkbox-group {
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 10px 5px; /* 左右のパディングを減らす */
+    }
+    
+    /* Excel関連ボタンの横並び解除 */
+    #member-management-panel .panel[style*="background-color: #f9f9f9"] > div {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    
+    /* Excelインポート/エクスポートボタン群 */
+    #excel-file-input,
+    #import-excel-button,
+    #download-template-button,
+    #export-excel-button {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    
+    /* 検索・ソート・フィルター欄 */
+    #list-controls {
+        flex-direction: column;
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    #search-input,
+    #sort-select {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* フィルターコントロールのスクロール幅制限 */
+    .filter-grid {
+        max-width: 100%;
+        box-sizing: border-box;
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+    
+    /* 一括操作パネル */
+    #bulk-action-panel {
+        max-width: 100%;
+    }
+    
+    #bulk-action-panel > div {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    
+    #bulk-action-select,
+    #bulk-expiry-select,
+    #bulk-custom-expiry,
+    #bulk-apply-button {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    
+    /* メンバーリスト項目 */
+    #admin-member-list {
+        max-width: 100%;
+    }
+    
+    #admin-member-list .member {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* 編集フォームの入力欄 */
+    .edit-form {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+    }
+    
+    .edit-form input,
+    .edit-form select {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* パネル全体の最大幅制限 */
+    .panel {
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+    }
+    
+    /* コンテナの幅制限 */
+    .container {
+        max-width: 100%;
+        padding: 0 5px;
+    }
+    
+    /* 日付入力フィールド（カスタム有効期限）の表示調整 */
+    #new-member-custom-expiry,
+    input[type="date"] {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* パネルヘッダーのボタン配置 */
+    .panel-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .panel-header button {
+        width: 100%;
+        margin-top: 10px;
+    }
+    
+    /* 横スクロール可能な要素のコンテナ幅制限 */
+    body {
+        overflow-x: hidden;
+    }
+    
+    /* メインコンテンツの幅制限 */
+    #main-content {
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+}
+
+
+/* タブレット対応（768px～1024px） */
+@media (min-width: 769px) and (max-width: 1024px) {
+    #add-member-form {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    
+    .filter-grid {
+        flex-wrap: wrap;
     }
 }
 
@@ -1002,13 +1113,15 @@ input:checked + .slider:before { transform: translateX(26px); }
 }
 
 .checkbox-group {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 8px;
+    display: flex;             /* flexboxに変更 */
+    flex-wrap: nowrap;         /* 折り返さない */
+    overflow-x: auto;          /* 横方向のスクロールを有効に */
+    gap: 15px;                 /* 各項目の間隔 */
     padding: 10px;
     background-color: #f9f9f9;
     border-radius: 6px;
     border: 1px solid #eee;
+    -webkit-overflow-scrolling: touch; /* iOSでのスムーズなスクロール */
 }
 
 .checkbox-group label {
@@ -1016,7 +1129,8 @@ input:checked + .slider:before { transform: translateX(26px); }
     align-items: center;
     gap: 6px;
     font-size: 0.9em;
-    white-space: nowrap;
+    white-space: nowrap;      /* テキストを折り返さないようにする */
+    flex-shrink: 0;           /* 項目が縮まないようにする */
 }
 
 /* --- Discord連携 ルール設定UIのスタイル --- */
