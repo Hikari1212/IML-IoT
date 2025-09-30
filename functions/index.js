@@ -43,6 +43,12 @@ const runtimeOpts = {
   region: "asia-northeast1",
 };
 
+const longRuntimeOpts = {
+  timeoutSeconds: 540, // タイムアウトを9分に延長
+  memory: "1GiB",
+  region: "asia-northeast1",
+};
+
 // (getSettings, updateDiscordSettingsなどの関数は変更なし)
 // --- 設定値を取得するためのヘルパー関数 ---
 async function getSettings() {
@@ -62,16 +68,14 @@ exports.updateDiscordSettings = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
-  const {discordMemberRoleEnabled, discordInRoomRoleEnabled, serverId, memberRoleId, inRoomRoleId, token} = request.data;
+  // 新しいデータ構造で保存
+  const { discordBotToken, discordServerId, discordRules } = request.data;
   await db.collection("settings").doc("config").set({
-    discordMemberRoleEnabled: !!discordMemberRoleEnabled,
-    discordInRoomRoleEnabled: !!discordInRoomRoleEnabled,
-    discordServerId: serverId,
-    discordMemberRoleId: memberRoleId,
-    discordInRoomRoleId: inRoomRoleId,
-    discordBotToken: token,
-  }, {merge: true});
-  return {result: "Discord設定を更新しました。"};
+    discordBotToken,
+    discordServerId,
+    discordRules: discordRules || [], // ルールがない場合は空の配列
+  }, { merge: true });
+  return { result: "Discord設定を更新しました。" };
 });
 
 exports.updateApiKey = onCall(runtimeOpts, async (request) => {
@@ -129,6 +133,7 @@ exports.getMemberListAPI = onRequest(runtimeOpts, async (req, res) => {
           furigana: memberData.furigana || "",
           grade: memberData.grade || "",
           project: memberData.project || "",
+          roles: memberData.roles || [],
           status: memberData.status,
           discordId: memberData.discordId || "",
           email: memberData.email || "",
@@ -145,97 +150,160 @@ exports.getMemberListAPI = onRequest(runtimeOpts, async (req, res) => {
 
 // --- Discord連携関数 ---
 exports.manageDiscordRoles = onDocumentWritten({
-  document: "members/{memberId}",
-  ...runtimeOpts,
+    document: "members/{memberId}",
+    ...runtimeOpts
 }, async (event) => {
-  const settings = await getSettings();
-  if (!settings.discordBotToken || !settings.discordServerId) {
-    console.log("BotトークンまたはサーバーIDが未設定のため、自動同期をスキップしました。");
-    return;
-  }
-  const discordApi = axios.create({
-    baseURL: "https://discord.com/api/v10",
-    headers: {Authorization: `Bot ${settings.discordBotToken}`},
-  });
-  const serverId = settings.discordServerId;
-  const memberRoleId = settings.discordMemberRoleId;
-  const inRoomRoleId = settings.discordInRoomRoleId;
-  const before = event.data?.before.data();
-  const after = event.data?.after.data();
+    const settings = await getSettings();
+    if (!settings.discordBotToken || !settings.discordServerId || !settings.discordRules) {
+        return;
+    }
 
-  if (!after || !after.discordId) {
-    if (before && before.discordId) {
-      console.log(`メンバー ${before.name} が削除されたため、ロールを剥奪します。`);
-      if (memberRoleId) await discordApi.delete(`/guilds/${serverId}/members/${before.discordId}/roles/${memberRoleId}`).catch((e) => console.error(JSON.stringify(e.response?.data)));
-      if (inRoomRoleId) await discordApi.delete(`/guilds/${serverId}/members/${before.discordId}/roles/${inRoomRoleId}`).catch((e) => console.error(JSON.stringify(e.response?.data)));
+    const discordApi = axios.create({
+        baseURL: "https://discord.com/api/v10",
+        headers: { Authorization: `Bot ${settings.discordBotToken}` },
+    });
+    const serverId = settings.discordServerId;
+    
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    const discordId = (after || before)?.discordId;
+
+    if (!discordId) return;
+
+    if (!after) {
+        console.log(`メンバー ${before.name} が削除されたため、ロールを剥奪します。`);
+        for (const rule of settings.discordRules) {
+            if (rule.roleId) {
+                await discordApi.delete(`/guilds/${serverId}/members/${discordId}/roles/${rule.roleId}`).catch(() => {});
+            }
+        }
+        return;
     }
-    return;
-  }
-  const discordUserId = after.discordId;
-  if (settings.discordMemberRoleEnabled && memberRoleId && (!before || before.isExpired !== after.isExpired)) {
-    try {
-      if (after.isExpired) {
-        await discordApi.delete(`/guilds/${serverId}/members/${discordUserId}/roles/${memberRoleId}`);
-      } else {
-        await discordApi.put(`/guilds/${serverId}/members/${discordUserId}/roles/${memberRoleId}`);
-      }
-    } catch (e) {
-      console.error("部員ロール更新失敗:", JSON.stringify(e.response?.data));
+
+    for (const rule of settings.discordRules) {
+        if (!rule.enabled || !rule.property || !rule.roleId) continue;
+
+        const checkCondition = (member) => {
+            if (!member) return false;
+            switch (rule.property) {
+                case 'status': return member.status === rule.value;
+                case 'grade': return member.grade === rule.value;
+                case 'roles': return (member.roles || []).includes(rule.value);
+                case 'isExpired':
+                    // ★ 修正点: !!member.isExpired で undefined や false を確実に false に変換
+                    return String(!!member.isExpired) === rule.value;
+                default: return false;
+            }
+        };
+
+        const shouldHaveRoleBefore = checkCondition(before);
+        const shouldHaveRoleAfter = checkCondition(after);
+
+        try {
+            if (shouldHaveRoleAfter && !shouldHaveRoleBefore) {
+                await discordApi.put(`/guilds/${serverId}/members/${discordId}/roles/${rule.roleId}`);
+            } else if (!shouldHaveRoleAfter && shouldHaveRoleBefore) {
+                await discordApi.delete(`/guilds/${serverId}/members/${discordId}/roles/${rule.roleId}`);
+            }
+        } catch (e) {
+            console.error(`ロール更新失敗 (${rule.roleId}):`, JSON.stringify(e.response?.data));
+        }
     }
-  }
-  if (settings.discordInRoomRoleEnabled && inRoomRoleId && (!before || before.status !== after.status)) {
-    try {
-      if (after.status === "in" && !after.isExpired) {
-        await discordApi.put(`/guilds/${serverId}/members/${discordUserId}/roles/${inRoomRoleId}`);
-      } else {
-        await discordApi.delete(`/guilds/${serverId}/members/${discordUserId}/roles/${inRoomRoleId}`);
-      }
-    } catch (e) {
-      console.error("部内ロール更新失敗:", JSON.stringify(e.response?.data));
-    }
-  }
 });
 
-exports.manualSyncDiscordRoles = onCall(runtimeOpts, async (request) => {
-  if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
-    throw new HttpsError("permission-denied", "権限がありません。");
-  }
-  const settings = await getSettings();
-  if (!settings.discordBotToken || !settings.discordServerId) {
-    throw new HttpsError("failed-precondition", "DiscordのBotトークンまたはサーバーIDが設定されていません。");
-  }
-  const discordApi = axios.create({
-    baseURL: "https://discord.com/api/v10",
-    headers: {Authorization: `Bot ${settings.discordBotToken}`},
-  });
-  const membersSnapshot = await db.collection("members").get();
-  let successCount = 0;
-  let errorCount = 0;
-  for (const doc of membersSnapshot.docs) {
-    const member = doc.data();
-    if (!member.discordId) continue;
-    try {
-      if (settings.discordMemberRoleId) {
-        if (member.isExpired) {
-          await discordApi.delete(`/guilds/${settings.discordServerId}/members/${member.discordId}/roles/${settings.discordMemberRoleId}`);
-        } else {
-          await discordApi.put(`/guilds/${settings.discordServerId}/members/${member.discordId}/roles/${settings.discordMemberRoleId}`);
-        }
-      }
-      if (settings.discordInRoomRoleId) {
-        if (member.status === "in" && !member.isExpired) {
-          await discordApi.put(`/guilds/${settings.discordServerId}/members/${member.discordId}/roles/${settings.discordInRoomRoleId}`);
-        } else {
-          await discordApi.delete(`/guilds/${settings.discordServerId}/members/${member.discordId}/roles/${settings.discordInRoomRoleId}`);
-        }
-      }
-      successCount++;
-    } catch (error) {
-      console.error(`同期失敗: ${member.name} (${member.discordId})`, error.response?.data);
-      errorCount++;
+// 待機用のヘルパー関数 (変更なし)
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+exports.manualSyncDiscordRoles = onCall(longRuntimeOpts, async (request) => {
+    if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
+        throw new HttpsError("permission-denied", "権限がありません。");
     }
-  }
-  return {result: `同期完了。成功: ${successCount}件, 失敗: ${errorCount}件`};
+    const settings = await getSettings();
+    if (!settings.discordBotToken || !settings.discordServerId || !settings.discordRules) {
+        throw new HttpsError("failed-precondition", "DiscordのBotトークン、サーバーID、またはルールが設定されていません。");
+    }
+
+    functions.logger.info("手動同期を開始します...", {rules: settings.discordRules.length});
+
+    const discordApi = axios.create({
+        baseURL: "https://discord.com/api/v10",
+        headers: { Authorization: `Bot ${settings.discordBotToken}` },
+    });
+    const serverId = settings.discordServerId;
+
+    const membersSnapshot = await db.collection("members").get();
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const doc of membersSnapshot.docs) {
+        const member = doc.data();
+        if (!member.discordId) continue;
+        
+        functions.logger.info(`処理中: ${member.name} (Discord ID: ${member.discordId})`);
+
+        let hasErrorInMember = false;
+        for (const rule of settings.discordRules) {
+            if (!rule.enabled || !rule.property || !rule.roleId) continue;
+            
+            const checkCondition = (m) => {
+                if (!m) return false;
+                const isExpiredValue = m.isExpired === true;
+                switch (rule.property) {
+                    case 'status': return m.status === rule.value;
+                    case 'grade': return m.grade === rule.value;
+                    case 'roles': return (m.roles || []).includes(rule.value);
+                    case 'isExpired': return String(isExpiredValue) === rule.value;
+                    default: return false;
+                }
+            };
+            
+            const shouldHaveRole = checkCondition(member);
+            functions.logger.info(`  ルール評価: [${rule.property} == ${rule.value}], 結果: ${shouldHaveRole ? '付与対象' : '剥奪対象'}, ロールID: ${rule.roleId}`);
+            
+            // ▼▼▼ リトライ処理のロジックをここから追加 ▼▼▼
+            const maxRetries = 3;
+            let success = false;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    if (shouldHaveRole) {
+                        await discordApi.put(`/guilds/${serverId}/members/${member.discordId}/roles/${rule.roleId}`);
+                    } else {
+                        await discordApi.delete(`/guilds/${serverId}/members/${member.discordId}/roles/${rule.roleId}`);
+                    }
+                    functions.logger.info(`    -> 成功 (試行 ${attempt}回目)`);
+                    success = true;
+                    break; // 成功したのでリトライを終了
+                } catch (error) {
+                    if (error.response?.status === 429) { // レート制限
+                        const retryAfter = (error.response.data.retry_after || 1) * 1000 + 500;
+                        functions.logger.warn(`    -> レート制限を検知。${retryAfter}ms 待機します... (試行 ${attempt}/${maxRetries})`);
+                        await wait(retryAfter);
+                        // ループの次の試行へ
+                    } else if (error.response?.status === 404 || error.response?.data?.code === 10011) {
+                        functions.logger.warn(`    -> スキップ: メンバーまたはロールが見つかりません。`);
+                        success = true; // これはエラーではないので成功として扱う
+                        break;
+                    } else {
+                        functions.logger.error(`    -> 失敗 (試行 ${attempt}/${maxRetries}):`, { error: error.response?.data });
+                        hasErrorInMember = true;
+                        break; // その他のエラーの場合はリトライを中断
+                    }
+                }
+            } // リトライの for ループの終わり
+
+            if (!success) {
+                functions.logger.error(`    -> 最終的な失敗: ${maxRetries}回のリトライ後も成功しませんでした。`);
+                hasErrorInMember = true;
+            }
+            // ▲▲▲ リトライ処理ここまで ▲▲▲
+            
+            await wait(100); // 各APIリクエスト間に短いウェイトを入れる
+        }
+        hasErrorInMember ? errorCount++ : successCount++;
+    }
+    
+    functions.logger.info(`手動同期完了。成功: ${successCount}件, 失敗: ${errorCount}件`);
+    return { result: `同期完了。成功: ${successCount}件, 失敗: ${errorCount}件` };
 });
 
 // --- 管理者CRUD関数 ---

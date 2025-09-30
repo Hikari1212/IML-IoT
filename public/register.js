@@ -66,6 +66,7 @@ export function initRegisterPage(db) {
                     grade: document.getElementById('new-member-grade').value,
                     category: document.getElementById('new-member-category').value,
                     project: document.getElementById('new-member-project').value,
+                    roles: [], // 役職は空配列で初期化
                     assignedKey: assignedKey,
                     status: 'out',
                     isExpired: true,      // ★ 必ず失効状態で作成

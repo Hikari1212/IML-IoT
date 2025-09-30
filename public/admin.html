@@ -159,6 +159,21 @@
                         <option value="custom">年月日を指定</option>
                     </select>
                     <input type="date" id="new-member-custom-expiry" style="display: none;">
+                        <div class="form-group full-width">
+                            <label>役職（複数選択可）</label>
+                            <div class="checkbox-group">
+                                <label><input type="checkbox" name="new-member-role" value="部長"> 部長</label>
+                                <label><input type="checkbox" name="new-member-role" value="副部長"> 副部長</label>
+                                <label><input type="checkbox" name="new-member-role" value="教育"> 教育</label>
+                                <label><input type="checkbox" name="new-member-role" value="広報"> 広報</label>
+                                <label><input type="checkbox" name="new-member-role" value="京王WS"> 京王WS</label>
+                                <label><input type="checkbox" name="new-member-role" value="イベント"> イベント</label>
+                                <label><input type="checkbox" name="new-member-role" value="会計"> 会計</label>
+                                <label><input type="checkbox" name="new-member-role" value="新歓"> 新歓</label>
+                                <label><input type="checkbox" name="new-member-role" value="調布祭"> 調布祭</label>
+                                <label><input type="checkbox" name="new-member-role" value="武蔵美連携"> 武蔵美連携</label>
+                            </div>
+                        </div>
                     <button type="submit">部員を追加</button>
                 </form>
                 <hr>
@@ -371,40 +386,29 @@
                 <h2>Discord連携設定</h2>
                 <form id="discord-settings-form">
                     <div class="form-group">
-                        <label>「部員」ロール自動付与</label>
-                        <div class="toggle-switch">
-                            <input type="checkbox" id="discord-member-role-enabled">
-                            <label for="discord-member-role-enabled" class="slider"></label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>「部内」ロール自動付与</label>
-                        <div class="toggle-switch">
-                            <input type="checkbox" id="discord-in-room-role-enabled">
-                            <label for="discord-in-room-role-enabled" class="slider"></label>
-                        </div>
-                    </div>
-                    <hr>
-                    <div class="form-group">
-                        <label for="discord-token">Discord Bot トークン</label>
-                        <input type="password" id="discord-token" placeholder="Botのトークン" required>
-                    </div>
-                    <div class="form-group">
                         <label for="discord-server-id">サーバーID</label>
                         <input type="text" id="discord-server-id" placeholder="サーバーID" required pattern="^\d{17,19}$">
                     </div>
                     <div class="form-group">
-                        <label for="discord-member-role-id">「部員」ロールID</label>
-                        <input type="text" id="discord-member-role-id" placeholder="部員ロールのID" required
-                            pattern="^\d{17,19}$">
+                        <label for="discord-token">Discord Bot トークン</label>
+                        <input type="password" id="discord-token" placeholder="Botのトークン" required>
                     </div>
-                    <div class="form-group">
-                        <label for="discord-in-room-role-id">「部内」ロールID</label>
-                        <input type="text" id="discord-in-room-role-id" placeholder="部内ロールのID" required
-                            pattern="^\d{17,19}$">
+                    <hr>
+
+                    <div class="panel-header" style="border-bottom: none; padding-bottom: 0;">
+                        <h3 style="border-bottom: none; margin-bottom: 0;">ロール付与ルール</h3>
+                        <button type="button" id="add-discord-rule-button" class="btn btn-secondary" style="font-size: 0.9em;">＋ ルールを追加</button>
                     </div>
+                    <p style="font-size: 0.9em; color: #666; margin-top:0;">
+                        部員情報が指定した条件に一致した場合に、特定のDiscordロールを自動で付与・剥奪します。
+                    </p>
+                    <div id="discord-rules-container">
+                        </div>
+                    
+                    <hr>
                     <button type="submit" id="save-discord-settings-button">Discord設定を保存</button>
                 </form>
+
                 <hr>
                 <div class="form-group">
                     <label>手動同期</label>
