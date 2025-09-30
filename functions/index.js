@@ -75,10 +75,11 @@ exports.updateDiscordSettings = onCall(runtimeOpts, async (request) => {
 });
 
 exports.updateApiKey = onCall(runtimeOpts, async (request) => {
-  if (!context.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
+  // 'context.auth' を 'request.auth' に修正
+  if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
-  // keyTypeでどのAPIキーを更新するか判断
+
   const { apiKey, keyType } = request.data;
   if (!apiKey || !keyType) {
     throw new HttpsError("invalid-argument", "APIキーとキーの種類が必要です。");

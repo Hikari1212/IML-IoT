@@ -117,6 +117,10 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const verifyResultCard = document.getElementById('verify-result-card');
     let verificationInterval = null; // 照合処理のインターバルID
 
+    const errorOverlay = document.getElementById('error-overlay');
+    const errorMessage = document.getElementById('error-message');
+    const retryButton = document.getElementById('retry-button');
+
     let modelsLoaded = false;
 
     // face-api.jsのモデルを非同期で読み込む関数
@@ -162,6 +166,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         loadSettings();
         initFaceEnrollmentTab();
     }
+
+    retryButton.addEventListener('click', loadSettings);
 
     // --- 生体情報登録・照合ページのイベントリスナー ---
     // タブパネルの表示/非表示を切り替えるヘルパー関数
@@ -449,10 +455,17 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
 
     async function loadSettings() {
+        // 読み込み開始時にエラー表示を隠す
+        errorOverlay.style.display = 'none';
         try {
             const getSettings = httpsCallable(functions, 'getSettings');
             const result = await getSettings();
             const settings = result.data || {};
+
+            // 成功したらメインコンテンツを表示
+            document.querySelector('#main-content .container').style.display = 'flex';
+            
+            // ... (既存の設定値の代入処理はそのまま) ...
             const apiKeyDisplay = document.getElementById('api-key-display');
             const faceVerifyApiKeyDisplay = document.getElementById('face-verify-api-key-display');
             
@@ -470,9 +483,13 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             if (inRoomRoleIdInput) inRoomRoleIdInput.value = settings.discordInRoomRoleId || '';
             if (apiKeyDisplay) apiKeyDisplay.value = settings.memberApiKey || 'APIキーが設定されていません';
             if (faceVerifyApiKeyDisplay) faceVerifyApiKeyDisplay.value = settings.faceVerifyApiKey || 'APIキーが設定されていません';
+
         } catch (error) {
             console.error("設定の読み込みに失敗:", error);
-            alert(`設定の読み込みに失敗しました: ${error.message}`);
+            // 失敗したらメインコンテンツを隠し、エラー表示を出す
+            document.querySelector('#main-content .container').style.display = 'none';
+            errorMessage.textContent = '設定の読み込みに失敗しました。サーバーが起動中の可能性があります。';
+            errorOverlay.style.display = 'block';
         }
     }
 

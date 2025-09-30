@@ -989,3 +989,10 @@ input:checked + .slider:before { transform: translateX(26px); }
     width: 32px;
     height: 32px;
 }
+
+#error-overlay {
+    max-width: 600px;
+    margin: 20px auto;
+    text-align: center;
+    border-color: #e53935;
+}
