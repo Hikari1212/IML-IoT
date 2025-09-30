@@ -117,6 +117,15 @@ export function initKioskPage(db) {
             console.error("DB検索エラー:", error);
         }
     });
+
+    // 顔登録ボタンのイベントリスナー
+    const goToEnrollmentButton = document.getElementById('go-to-enrollment-button');
+    if (goToEnrollmentButton) {
+        goToEnrollmentButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            showEnrollmentPanel(); // 既存の画面遷移関数を呼び出す
+        });
+    }
 }
 
 

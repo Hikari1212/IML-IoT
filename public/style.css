@@ -574,6 +574,7 @@ input:checked + .slider:before { transform: translateX(26px); }
     border: 4px solid transparent;
     border-radius: 8px;
     transition: border-color 0.3s ease;
+    pointer-events: none;
 }
 #face-overlay.success {
     border-color: #4CAF50; /* 成功時は緑 */
@@ -951,10 +952,40 @@ input:checked + .slider:before { transform: translateX(26px); }
 }
 
 /* 古いボタンクラスのスタイルをリセット */
-.save-button, .cancel-button {
+/* .save-button, .cancel-button {
     background-color: initial;
-}
+} */
 
 .checkbox-label-reverse {
     white-space: nowrap; /* テキストの折り返しを禁止 */
+}
+
+/* --- キオスク画面の顔登録ボタンのスタイル --- */
+#go-to-enrollment-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background-color: #5c6bc0;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    text-decoration: none;
+    transition: background-color 0.2s, transform 0.2s;
+    z-index: 1000;
+}
+
+#go-to-enrollment-button:hover {
+    background-color: #3f51b5;
+    transform: scale(1.1);
+}
+
+#go-to-enrollment-button svg {
+    stroke: white;
+    width: 32px;
+    height: 32px;
 }

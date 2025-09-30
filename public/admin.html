@@ -277,8 +277,7 @@
             <div id="biometric-enrollment-panel" class="panel content-panel" style="display: none;">
                 <h2>生体情報管理</h2>
                 <div class="tab-buttons">
-                    <button id="enroll-tab-button" class="tab-button active">登録</button>
-                    <button id="verify-tab-button" class="tab-button">照合</button>
+                    <button id="enroll-tab-button" class="tab-button active">トークン生成</button> <button id="face-enroll-tab-button" class="tab-button">顔情報登録</button> <button id="verify-tab-button" class="tab-button">照合</button>
                 </div>
 
                 <div id="enroll-mode">
@@ -299,12 +298,31 @@
                     <p>カメラに顔を向けてください。登録されている部員情報を検索します。</p>
                     <div class="enrollment-container">
                         <div class="camera-container">
-                            <video id="verify-video" width="600" height="450" autoplay muted></video>
+                            <video id="verify-video" width="600" height="450" autoplay muted playsinline></video>
                             <div id="verify-face-overlay"></div>
                         </div>
                         <div class="verification-results">
                             <p id="verify-status">カメラ準備中...</p>
                             <div id="verify-result-card" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="face-enroll-mode" style="display: none;">
+                    <h2>顔情報の登録</h2>
+                    <p>管理者から発行されたトークンを入力し、「登録開始」ボタンを押してください。<br>カメラに顔をまっすぐ向けて、枠内に収まるようにしてください。</p>
+                    <div class="enrollment-container">
+                        <div class="camera-container">
+                            <video id="video" width="600" height="450" autoplay muted playsinline></video>
+                            <div id="face-overlay"></div>
+                        </div>
+                        <div class="enrollment-controls">
+                            <div class="form-group">
+                                <label for="enrollment-token">登録トークン</label>
+                                <input type="text" id="enrollment-token" placeholder="管理者から受け取ったトークン">
+                            </div>
+                            <button id="start-enrollment-button" class="btn btn-primary">登録開始</button>
+                            <p id="enrollment-status">準備完了</p>
                         </div>
                     </div>
                 </div>

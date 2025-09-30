@@ -110,6 +110,8 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const verifyTabButton = document.getElementById('verify-tab-button');
     const enrollModeDiv = document.getElementById('enroll-mode');
     const verifyModeDiv = document.getElementById('verify-mode');
+    const faceEnrollTabButton = document.getElementById('face-enroll-tab-button');
+    const faceEnrollModeDiv = document.getElementById('face-enroll-mode');
     const verifyVideo = document.getElementById('verify-video');
     const verifyStatus = document.getElementById('verify-status');
     const verifyResultCard = document.getElementById('verify-result-card');
@@ -158,7 +160,37 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         loadActivityLogs();
         loadAdminList();
         loadSettings();
+        initFaceEnrollmentTab();
     }
+
+    // --- 生体情報登録・照合ページのイベントリスナー ---
+    // タブパネルの表示/非表示を切り替えるヘルパー関数
+    function switchBiometricTab(activeTab, activePanel) {
+        // まずカメラや照合処理を止める
+        stopAllBiometricProcesses();
+
+        // 全てのタブとパネルを非アクティブ化
+        [enrollTabButton, faceEnrollTabButton, verifyTabButton].forEach(btn => btn.classList.remove('active'));
+        [enrollModeDiv, faceEnrollModeDiv, verifyModeDiv].forEach(panel => panel.style.display = 'none');
+
+        // 指定されたタブとパネルをアクティブ化
+        activeTab.classList.add('active');
+        activePanel.style.display = 'block';
+    }
+
+    enrollTabButton.addEventListener('click', () => {
+        switchBiometricTab(enrollTabButton, enrollModeDiv);
+    });
+
+    faceEnrollTabButton.addEventListener('click', () => {
+        switchBiometricTab(faceEnrollTabButton, faceEnrollModeDiv);
+        // このタブに切り替えたときにカメラを起動するロジックはinitFaceEnrollmentTab内にあります
+    });
+
+    verifyTabButton.addEventListener('click', () => {
+        switchBiometricTab(verifyTabButton, verifyModeDiv);
+        startVerification();
+    });
 
     loginButton.addEventListener('click', () => {
         const email = document.getElementById('login-email').value;
@@ -210,38 +242,139 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         sideNav.classList.remove('open');
     }
 
+
     // --- 生体情報登録・照合ページのイベントリスナー ---
-    enrollTabButton.addEventListener('click', () => {
-        enrollTabButton.classList.add('active');
-        verifyTabButton.classList.remove('active');
-        enrollModeDiv.style.display = 'block';
-        verifyModeDiv.style.display = 'none';
-        
-        // 照合処理を停止
+
+    // 顔登録タブの初期化処理（登録ボタンのイベントリスナーのみ設定）
+    function initFaceEnrollmentTab() {
+        const video = document.getElementById('video');
+        const tokenInput = document.getElementById('enrollment-token');
+        const statusText = document.getElementById('enrollment-status');
+        const faceOverlay = document.getElementById('face-overlay');
+        const startButton = document.getElementById('start-enrollment-button');
+    
+        // この関数はページ読み込み時に一度だけ呼ばれる
+        startButton.addEventListener('click', async () => {
+            const token = tokenInput.value;
+            if (!token) {
+                statusText.textContent = 'トークンを入力してください。';
+                return;
+            }
+    
+            statusText.textContent = '顔を検出しています...';
+            faceOverlay.classList.remove('success', 'failure');
+            startButton.disabled = true;
+    
+            try {
+                // モデルが読み込まれていなければ待つ
+                await loadModels();
+
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                                              .withFaceLandmarks()
+                                              .withFaceDescriptor();
+    
+                if (!detection) {
+                    statusText.textContent = '顔が検出できませんでした。もう一度試してください。';
+                    faceOverlay.classList.add('failure');
+                    return;
+                }
+    
+                statusText.textContent = '顔を検出しました。サーバーに登録しています...';
+                faceOverlay.classList.add('success');
+    
+                const templateData = Array.from(detection.descriptor);
+                const registerBiometric = httpsCallable(functions, 'registerBiometric');
+                const result = await registerBiometric({ token, templateData });
+                
+                alert(result.data.result);
+                statusText.textContent = "登録が完了しました。";
+                
+                // 登録完了後、トークン生成タブに戻る
+                enrollTabButton.click();
+    
+            } catch (error) {
+                console.error("登録エラー:", error);
+                statusText.textContent = `エラー: ${error.message}`;
+                faceOverlay.classList.add('failure');
+            } finally {
+                startButton.disabled = false;
+            }
+        });
+    }
+
+    // カメラ関連の処理をすべて停止するヘルパー関数
+    function stopAllBiometricProcesses() {
         if (verificationInterval) {
             clearInterval(verificationInterval);
             verificationInterval = null;
         }
-        const stream = verifyVideo.srcObject;
-        if (stream) stream.getTracks().forEach(track => track.stop());
+        // 各カメラ要素のストリームを停止
+        const video = document.getElementById('video');
+        if (video && video.srcObject) {
+            video.srcObject.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        const verifyVideoEl = document.getElementById('verify-video');
+        if (verifyVideoEl && verifyVideoEl.srcObject) {
+            verifyVideoEl.srcObject.getTracks().forEach(track => track.stop());
+            verifyVideoEl.srcObject = null;
+        }
+        console.log("All camera streams stopped.");
+    }
+
+    // タブパネルの表示/非表示を切り替えるヘルパー関数
+    // function switchBiometricTab(activeTab, activePanel) {
+    //     [enrollTabButton, faceEnrollTabButton, verifyTabButton].forEach(btn => btn.classList.remove('active'));
+    //     [enrollModeDiv, faceEnrollModeDiv, verifyModeDiv].forEach(panel => panel.style.display = 'none');
+
+    //     activeTab.classList.add('active');
+    //     activePanel.style.display = 'block';
+    // }
+    
+    // 顔情報登録タブで使うカメラを起動する関数
+    async function startCameraForEnrollment() {
+        await loadModels(); // モデル読み込みを待つ
+        const video = document.getElementById('video');
+        const statusText = document.getElementById('enrollment-status');
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+            if(video) video.srcObject = stream;
+        } catch (err) {
+            console.error("顔登録用のカメラ起動に失敗:", err);
+            if(statusText) statusText.textContent = 'エラー: カメラ起動失敗';
+        }
+    }
+    
+    // 各タブボタンのクリックイベント
+    enrollTabButton.addEventListener('click', () => {
+        stopAllBiometricProcesses();
+        switchBiometricTab(enrollTabButton, enrollModeDiv);
+    });
+
+    faceEnrollTabButton.addEventListener('click', () => {
+        stopAllBiometricProcesses();
+        switchBiometricTab(faceEnrollTabButton, faceEnrollModeDiv);
+        startCameraForEnrollment();
     });
 
     verifyTabButton.addEventListener('click', () => {
-        verifyTabButton.classList.add('active');
-        enrollTabButton.classList.remove('active');
-        verifyModeDiv.style.display = 'block';
-        enrollModeDiv.style.display = 'none';
+        // startVerification内でカメラ停止処理も行うため、ここでは呼ばない
+        switchBiometricTab(verifyTabButton, verifyModeDiv);
         startVerification();
     });
 
+    // 照合処理
     async function startVerification() {
+        // 処理開始時に一度すべてのカメラを止める
+        stopAllBiometricProcesses();
         await loadModels();
+
         verifyStatus.textContent = 'カメラ準備中...';
         verifyResultCard.style.display = 'none';
         
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
-            verifyVideo.srcObject = stream;
+            if (verifyVideo) verifyVideo.srcObject = stream;
         } catch (err) {
             verifyStatus.textContent = 'エラー: カメラの起動に失敗しました。';
             return;
@@ -249,8 +382,12 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
         verifyStatus.textContent = '照合中... カメラに顔を向けてください。';
 
-        // 2秒ごとに顔を検出して照合
         verificationInterval = setInterval(async () => {
+            if (!verifyVideo || !verifyVideo.srcObject) {
+                if(verificationInterval) clearInterval(verificationInterval);
+                return;
+            }
+            
             const detection = await faceapi.detectSingleFace(verifyVideo, new faceapi.TinyFaceDetectorOptions())
                                           .withFaceLandmarks()
                                           .withFaceDescriptor();
@@ -273,8 +410,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                             <p><strong>ステータス:</strong> ${member.isExpired ? '失効' : (member.status === 'in' ? '在室中' : '不在')}</p>
                         `;
                         verifyResultCard.style.display = 'block';
-                        // 照合に成功したら一旦停止
-                        clearInterval(verificationInterval);
+                        stopAllBiometricProcesses(); // 成功したら停止
                     } else {
                         verifyStatus.textContent = '登録データに一致しません。照合中...';
                         verifyResultCard.style.display = 'none';
@@ -1463,6 +1599,71 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             if (!logPrevButton.disabled) {
                 logCurrentPage--;
                 loadActivityLogs();
+            }
+        });
+    }
+    
+    function initFaceEnrollmentTab() {
+        const video = document.getElementById('video');
+        const tokenInput = document.getElementById('enrollment-token');
+        const statusText = document.getElementById('enrollment-status');
+        const faceOverlay = document.getElementById('face-overlay');
+        const startButton = document.getElementById('start-enrollment-button');
+    
+        async function startCameraForEnrollment() {
+            await loadModels(); // 既にadmin.jsにあるモデル読み込み関数を利用
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error("カメラの起動に失敗:", err);
+                statusText.textContent = 'エラー: カメラ起動失敗';
+            }
+        }
+    
+        // このタブが表示されたときにカメラを起動するイベントリスナー
+        faceEnrollTabButton.addEventListener('click', startCameraForEnrollment);
+
+        startButton.addEventListener('click', async () => {
+            const token = tokenInput.value;
+            if (!token) {
+                statusText.textContent = 'トークンを入力してください。';
+                return;
+            }
+    
+            statusText.textContent = '顔を検出しています...';
+            faceOverlay.classList.remove('success', 'failure');
+            startButton.disabled = true;
+    
+            try {
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                                              .withFaceLandmarks()
+                                              .withFaceDescriptor();
+    
+                if (!detection) {
+                    statusText.textContent = '顔が検出できませんでした。もう一度試してください。';
+                    faceOverlay.classList.add('failure');
+                    return;
+                }
+    
+                statusText.textContent = '顔を検出しました。サーバーに登録しています...';
+                faceOverlay.classList.add('success');
+    
+                const templateData = Array.from(detection.descriptor);
+                const registerBiometric = httpsCallable(functions, 'registerBiometric');
+                const result = await registerBiometric({ token, templateData });
+                
+                alert(result.data.result); // アラートで成功を通知
+                statusText.textContent = "登録が完了しました。";
+                // 登録完了後、トークン生成タブに戻る
+                enrollTabButton.click();
+    
+            } catch (error) {
+                console.error("登録エラー:", error);
+                statusText.textContent = `エラー: ${error.message}`;
+                faceOverlay.classList.add('failure');
+            } finally {
+                startButton.disabled = false;
             }
         });
     }
