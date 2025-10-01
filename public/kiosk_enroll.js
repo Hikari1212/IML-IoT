@@ -14,14 +14,12 @@ export function initEnrollmentPage(db, functions) {
     
     let modelsLoaded = false;
     
-    // face-api.jsのモデルを読み込む
     async function loadModels() {
         if (modelsLoaded) return;
-        const MODEL_URL = '/weights'; // モデルファイルが置いてあるパス
+        const MODEL_URL = '/weights';
         try {
             await Promise.all([
                 faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                 faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
             ]);
@@ -33,42 +31,72 @@ export function initEnrollmentPage(db, functions) {
         }
     }
 
-    // カメラを起動する
     async function startCamera() {
         if (!modelsLoaded) await loadModels();
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
             video.srcObject = stream;
-            resetInactivityTimer(); // カメラ起動時にタイマー開始
+            resetInactivityTimer();
         } catch (err) {
             console.error("カメラの起動に失敗:", err);
             statusText.textContent = 'エラー: カメラ起動失敗';
         }
     }
 
-    // 無操作タイムアウト処理
     function resetInactivityTimer() {
         clearTimeout(inactivityTimer);
         inactivityTimer = setTimeout(() => {
             console.log("無操作状態が1分続いたため、キオスク画面に戻ります。");
             showKioskPanel();
-        }, 60 * 1000); // 1分
+        }, 60 * 1000);
     }
 
-    // 登録画面のイベントリスナー
     enrollmentPanel.addEventListener('mousemove', resetInactivityTimer);
     enrollmentPanel.addEventListener('keypress', resetInactivityTimer);
 
-    // 戻るボタンのクリックイベント
     if (backToKioskButton) {
         backToKioskButton.addEventListener('click', () => {
-            clearTimeout(inactivityTimer); // タイマーをクリア
+            clearTimeout(inactivityTimer);
             showKioskPanel();
         });
     }
 
-    // 外部からカメラ起動のイベントを受け取る
     document.addEventListener('start-camera', startCamera);
+
+    // ▼▼▼【修正点 1】品質チェック関数が理由を返すように変更 ▼▼▼
+    function isGoodQuality(detection, videoElement) {
+        if (!detection) {
+            return { success: false, reason: "顔を検出できません..." };
+        }
+        const faceBox = detection.detection.box;
+        const landmarks = detection.landmarks;
+        const videoWidth = videoElement.clientWidth;
+        const videoHeight = videoElement.clientHeight;
+
+        if (videoWidth === 0 || videoHeight === 0) {
+            return { success: false, reason: "カメラサイズ取得エラー" };
+        }
+
+        const faceArea = faceBox.width * faceBox.height;
+        const videoArea = videoWidth * videoHeight;
+        if ((faceArea / videoArea) < 0.20) {
+            return { success: false, reason: "顔が小さすぎます。カメラに近づいてください。" };
+        }
+
+        const faceCenterX = faceBox.x + faceBox.width / 2;
+        const faceCenterY = faceBox.y + faceBox.height / 2;
+        const isHorizontallyCentered = faceCenterX > videoWidth * 0.25 && faceCenterX < videoWidth * 0.75;
+        const isVerticallyCentered = faceCenterY > videoHeight * 0.25 && faceCenterY < videoHeight * 0.75;
+        if (!isHorizontallyCentered || !isVerticallyCentered) {
+            return { success: false, reason: "顔が中央にありません。枠内に収めてください。" };
+        }
+
+        if (!landmarks.getLeftEye().length || !landmarks.getRightEye().length || !landmarks.getMouth().length) {
+            return { success: false, reason: "目や口が隠れています。前髪やマスクを外してください。" };
+        }
+        
+        return { success: true };
+    }
 
     startButton.addEventListener('click', async () => {
         const token = tokenInput.value;
@@ -81,60 +109,62 @@ export function initEnrollmentPage(db, functions) {
         startButton.disabled = true;
 
         try {
-            // --- ここからが新しい実装 ---
-
-            const CAPTURE_COUNT = 3; // 撮影する枚数
-            const descriptors = [];    // 取得した特徴量データを保存する配列
-            
-            // ユーザーに撮影時のポーズを指示するためのテキスト
+            const CAPTURE_COUNT = 3;
+            const descriptors = [];
             const prompts = [
                 "正面をまっすぐ向いてください...",
                 "次は、顔を少しだけ左に向けてください...",
                 "最後に、顔を少しだけ右に向けてください..."
             ];
 
-            // 設定した回数だけループして顔を撮影する
             for (let i = 0; i < CAPTURE_COUNT; i++) {
                 statusText.textContent = `${i + 1} / ${CAPTURE_COUNT} : ${prompts[i]}`;
                 
-                // ユーザーがポーズをとるための短い待機時間
-                await new Promise(resolve => setTimeout(resolve, 3000)); 
-
-                const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options()) // 高精度モデルを推奨
-                                              .withFaceLandmarks()
-                                              .withFaceDescriptor();
-
-                // 顔が検出できなかった場合は処理を中断する
-                if (!detection) {
-                    statusText.textContent = `顔が検出できませんでした。もう一度最初からやり直してください。`;
-                    faceOverlay.classList.add('failure');
-                    return; // finallyブロックが実行される
+                let successfulShot = false;
+                for (let attempt = 0; attempt < 50; attempt++) {
+                    const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options())
+                                                  .withFaceLandmarks()
+                                                  .withFaceDescriptor();
+                    
+                    // ▼▼▼【修正点 2】品質チェックの結果を画面に表示 ▼▼▼
+                    const qualityCheck = isGoodQuality(detection, video);
+                    
+                    if (qualityCheck.success) {
+                        descriptors.push(detection.descriptor);
+                        successfulShot = true;
+                        
+                        faceOverlay.classList.add('success');
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                        faceOverlay.classList.remove('success');
+                        
+                        break;
+                    } else {
+                        // 失敗理由をリアルタイムで表示
+                        statusText.textContent = qualityCheck.reason;
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
 
-                // 検出成功したら特徴量データを配列に保存
-                descriptors.push(detection.descriptor);
+                if (!successfulShot) {
+                    statusText.textContent = `良い品質の顔が検出できませんでした。撮影環境を確認してください。`;
+                    faceOverlay.classList.add('failure');
+                    return;
+                }
             }
 
-            // --- 撮影した特徴量を平均化する処理 ---
             statusText.textContent = '特徴を平均化しています...';
-            
-            // 平均化された特徴量を格納するための配列を用意 (128次元)
             const averageDescriptor = new Float32Array(128);
-
-            // descriptors配列内のすべての特徴量を合計する
             for (const descriptor of descriptors) {
                 for (let i = 0; i < descriptor.length; i++) {
                     averageDescriptor[i] += descriptor[i];
                 }
             }
-            
-            // 合計値を撮影枚数で割り、平均を算出する
             for (let i = 0; i < averageDescriptor.length; i++) {
                 averageDescriptor[i] /= CAPTURE_COUNT;
             }
 
-            // --- 平均化したデータをサーバーに登録する ---
-            statusText.textContent = '顔を検出しました。サーバーに登録しています...';
+            statusText.textContent = 'サーバーに登録しています...';
             faceOverlay.classList.add('success');
 
             const templateData = Array.from(averageDescriptor);
@@ -150,7 +180,6 @@ export function initEnrollmentPage(db, functions) {
             statusText.textContent = `エラー: ${error.message}`;
             faceOverlay.classList.add('failure');
         } finally {
-            // 処理が成功しても失敗してもボタンを再度有効にする
             startButton.disabled = false;
         }
     });

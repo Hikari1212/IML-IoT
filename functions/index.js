@@ -49,14 +49,13 @@ const longRuntimeOpts = {
   region: "asia-northeast1",
 };
 
-// (getSettings, updateDiscordSettingsなどの関数は変更なし)
 // --- 設定値を取得するためのヘルパー関数 ---
 async function getSettings() {
   const doc = await db.collection("settings").doc("config").get();
   return doc.exists ? doc.data() : {};
 }
 
-// --- 設定管理関数 ---
+// (getSettings, updateDiscordSettingsなどの関数は変更なし)
 exports.getSettings = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
@@ -68,27 +67,23 @@ exports.updateDiscordSettings = onCall(runtimeOpts, async (request) => {
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
-  // 新しいデータ構造で保存
   const { discordBotToken, discordServerId, discordRules } = request.data;
   await db.collection("settings").doc("config").set({
     discordBotToken,
     discordServerId,
-    discordRules: discordRules || [], // ルールがない場合は空の配列
+    discordRules: discordRules || [],
   }, { merge: true });
   return { result: "Discord設定を更新しました。" };
 });
 
 exports.updateApiKey = onCall(runtimeOpts, async (request) => {
-  // 'context.auth' を 'request.auth' に修正
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
     throw new HttpsError("permission-denied", "権限がありません。");
   }
-
   const { apiKey, keyType } = request.data;
   if (!apiKey || !keyType) {
     throw new HttpsError("invalid-argument", "APIキーとキーの種類が必要です。");
   }
-
   let fieldToUpdate;
   if (keyType === 'memberApiKey') {
     fieldToUpdate = 'memberApiKey';
@@ -97,7 +92,6 @@ exports.updateApiKey = onCall(runtimeOpts, async (request) => {
   } else {
     throw new HttpsError("invalid-argument", "無効なキーの種類です。");
   }
-  
   await db.collection("settings").doc("config").set({ [fieldToUpdate]: apiKey }, { merge: true });
   return { result: "APIキーを更新しました。" };
 });
@@ -157,19 +151,15 @@ exports.manageDiscordRoles = onDocumentWritten({
     if (!settings.discordBotToken || !settings.discordServerId || !settings.discordRules) {
         return;
     }
-
     const discordApi = axios.create({
         baseURL: "https://discord.com/api/v10",
         headers: { Authorization: `Bot ${settings.discordBotToken}` },
     });
     const serverId = settings.discordServerId;
-    
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     const discordId = (after || before)?.discordId;
-
     if (!discordId) return;
-
     if (!after) {
         console.log(`メンバー ${before.name} が削除されたため、ロールを剥奪します。`);
         for (const rule of settings.discordRules) {
@@ -179,10 +169,8 @@ exports.manageDiscordRoles = onDocumentWritten({
         }
         return;
     }
-
     for (const rule of settings.discordRules) {
         if (!rule.enabled || !rule.property || !rule.roleId) continue;
-
         const checkCondition = (member) => {
             if (!member) return false;
             switch (rule.property) {
@@ -190,15 +178,12 @@ exports.manageDiscordRoles = onDocumentWritten({
                 case 'grade': return member.grade === rule.value;
                 case 'roles': return (member.roles || []).includes(rule.value);
                 case 'isExpired':
-                    // ★ 修正点: !!member.isExpired で undefined や false を確実に false に変換
                     return String(!!member.isExpired) === rule.value;
                 default: return false;
             }
         };
-
         const shouldHaveRoleBefore = checkCondition(before);
         const shouldHaveRoleAfter = checkCondition(after);
-
         try {
             if (shouldHaveRoleAfter && !shouldHaveRoleBefore) {
                 await discordApi.put(`/guilds/${serverId}/members/${discordId}/roles/${rule.roleId}`);
@@ -211,7 +196,6 @@ exports.manageDiscordRoles = onDocumentWritten({
     }
 });
 
-// 待機用のヘルパー関数 (変更なし)
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 exports.manualSyncDiscordRoles = onCall(longRuntimeOpts, async (request) => {
@@ -222,29 +206,22 @@ exports.manualSyncDiscordRoles = onCall(longRuntimeOpts, async (request) => {
     if (!settings.discordBotToken || !settings.discordServerId || !settings.discordRules) {
         throw new HttpsError("failed-precondition", "DiscordのBotトークン、サーバーID、またはルールが設定されていません。");
     }
-
     functions.logger.info("手動同期を開始します...", {rules: settings.discordRules.length});
-
     const discordApi = axios.create({
         baseURL: "https://discord.com/api/v10",
         headers: { Authorization: `Bot ${settings.discordBotToken}` },
     });
     const serverId = settings.discordServerId;
-
     const membersSnapshot = await db.collection("members").get();
     let successCount = 0;
     let errorCount = 0;
-
     for (const doc of membersSnapshot.docs) {
         const member = doc.data();
         if (!member.discordId) continue;
-        
         functions.logger.info(`処理中: ${member.name} (Discord ID: ${member.discordId})`);
-
         let hasErrorInMember = false;
         for (const rule of settings.discordRules) {
             if (!rule.enabled || !rule.property || !rule.roleId) continue;
-            
             const checkCondition = (m) => {
                 if (!m) return false;
                 const isExpiredValue = m.isExpired === true;
@@ -256,11 +233,8 @@ exports.manualSyncDiscordRoles = onCall(longRuntimeOpts, async (request) => {
                     default: return false;
                 }
             };
-            
             const shouldHaveRole = checkCondition(member);
             functions.logger.info(`  ルール評価: [${rule.property} == ${rule.value}], 結果: ${shouldHaveRole ? '付与対象' : '剥奪対象'}, ロールID: ${rule.roleId}`);
-            
-            // ▼▼▼ リトライ処理のロジックをここから追加 ▼▼▼
             const maxRetries = 3;
             let success = false;
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -272,36 +246,31 @@ exports.manualSyncDiscordRoles = onCall(longRuntimeOpts, async (request) => {
                     }
                     functions.logger.info(`    -> 成功 (試行 ${attempt}回目)`);
                     success = true;
-                    break; // 成功したのでリトライを終了
+                    break;
                 } catch (error) {
-                    if (error.response?.status === 429) { // レート制限
+                    if (error.response?.status === 429) {
                         const retryAfter = (error.response.data.retry_after || 1) * 1000 + 500;
                         functions.logger.warn(`    -> レート制限を検知。${retryAfter}ms 待機します... (試行 ${attempt}/${maxRetries})`);
                         await wait(retryAfter);
-                        // ループの次の試行へ
                     } else if (error.response?.status === 404 || error.response?.data?.code === 10011) {
                         functions.logger.warn(`    -> スキップ: メンバーまたはロールが見つかりません。`);
-                        success = true; // これはエラーではないので成功として扱う
+                        success = true;
                         break;
                     } else {
                         functions.logger.error(`    -> 失敗 (試行 ${attempt}/${maxRetries}):`, { error: error.response?.data });
                         hasErrorInMember = true;
-                        break; // その他のエラーの場合はリトライを中断
+                        break;
                     }
                 }
-            } // リトライの for ループの終わり
-
+            }
             if (!success) {
                 functions.logger.error(`    -> 最終的な失敗: ${maxRetries}回のリトライ後も成功しませんでした。`);
                 hasErrorInMember = true;
             }
-            // ▲▲▲ リトライ処理ここまで ▲▲▲
-            
-            await wait(100); // 各APIリクエスト間に短いウェイトを入れる
+            await wait(100);
         }
         hasErrorInMember ? errorCount++ : successCount++;
     }
-    
     functions.logger.info(`手動同期完了。成功: ${successCount}件, 失敗: ${errorCount}件`);
     return { result: `同期完了。成功: ${successCount}件, 失敗: ${errorCount}件` };
 });
@@ -339,16 +308,6 @@ exports.listAdmins = onCall(runtimeOpts, async (request) => {
       adminDocs.docs.map((doc) => auth.getUser(doc.id).catch(() => null)),
   );
   return adminUsers.filter((user) => user).map((user) => ({uid: user.uid, email: user.email}));
-});
-
-exports.updateAdmin = onCall(runtimeOpts, async (request) => {
-  if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
-    throw new HttpsError("permission-denied", "権限がありません。");
-  }
-  const {uid, newEmail} = request.data;
-  await auth.updateUser(uid, {email: newEmail});
-  await db.collection("admins").doc(uid).update({email: newEmail});
-  return {result: "管理者のメールアドレスを更新しました。"};
 });
 
 exports.deleteAdmin = onCall(runtimeOpts, async (request) => {
@@ -437,7 +396,6 @@ exports.deleteBiometric = onCall(runtimeOpts, async (request) => {
 
 
 exports.identifyMemberByFace = onCall(runtimeOpts, async (request) => {
-  // ▼▼▼ 初期化が完了するのを待つ ▼▼▼
   await initializationPromise;
 
   if (!request.auth || !(await db.collection("admins").doc(request.auth.uid).get()).exists) {
@@ -453,20 +411,42 @@ exports.identifyMemberByFace = onCall(runtimeOpts, async (request) => {
   if (snapshot.empty) {
     throw new HttpsError("not-found", "登録されている顔データがありません。");
   }
+  
+  const settings = await getSettings();
+  const distanceThreshold = settings.faceRecognitionThreshold || 0.5;
+
   const queryDescriptor = new Float32Array(descriptor);
-  let bestMatch = {memberId: null, distance: 0.5};
+
+  // ▼▼▼【修正点】照合ロジックを変更 ▼▼▼
+  let bestMatch = {memberId: null, distance: Infinity};
+  let secondBestMatch = {memberId: null, distance: Infinity};
+
   for (const doc of snapshot.docs) {
     const docData = doc.data();
     if (docData.templateData && Array.isArray(docData.templateData)) {
       const storedDescriptor = new Float32Array(docData.templateData);
       const distance = faceapi.euclideanDistance(queryDescriptor, storedDescriptor);
       if (distance < bestMatch.distance) {
+        secondBestMatch = bestMatch;
         bestMatch = {memberId: docData.memberId, distance: distance};
+      } else if (distance < secondBestMatch.distance) {
+        secondBestMatch = {memberId: docData.memberId, distance: distance};
       }
     }
   }
-  if (bestMatch.memberId) {
-    const memberDoc = await db.collection("members").doc(bestMatch.memberId).get();
+
+  let finalMemberId = null;
+  if (bestMatch.distance < distanceThreshold) {
+    const ratioThreshold = 0.8; 
+    if (secondBestMatch.distance === Infinity || (bestMatch.distance / secondBestMatch.distance) < ratioThreshold) {
+        finalMemberId = bestMatch.memberId;
+    } else {
+        console.log(`認証拒否: 曖昧な一致です。 Best[${bestMatch.distance}] vs 2ndBest[${secondBestMatch.distance}]`);
+    }
+  }
+
+  if (finalMemberId) {
+    const memberDoc = await db.collection("members").doc(finalMemberId).get();
     if (memberDoc.exists) {
       return {
         id: memberDoc.id,
@@ -482,35 +462,31 @@ exports.verifyFaceAPI = onRequest(runtimeOpts, async (req, res) => {
   const cors = require("cors")({ origin: true });
   cors(req, res, async () => {
     try {
-      // 1. 初期化が完了するのを待つ
       await initializationPromise;
-
-      // 2. APIキーを検証
       const settings = await getSettings();
       const storedApiKey = settings.faceVerifyApiKey;
       if (!storedApiKey) {
-        console.error("顔認証APIキーが設定されていません。");
         return res.status(500).send({ error: "API key is not configured." });
       }
       const apiKey = req.headers["x-api-key"];
       if (apiKey !== storedApiKey) {
         return res.status(403).send({ error: "Forbidden" });
       }
-
-      // 3. リクエストボディからdescriptorを取得
       const { descriptor } = req.body;
       if (!descriptor || !Array.isArray(descriptor) || descriptor.length !== 128) {
         return res.status(400).send({ error: "Invalid descriptor data." });
       }
-      
-      // 4. データベース内の顔情報と照合
       const snapshot = await db.collection("biometrics").where("type", "==", "face").get();
       if (snapshot.empty) {
         return res.status(404).send({ error: "No face data registered." });
       }
 
+      const distanceThreshold = settings.faceRecognitionThreshold || 0.5;
       const queryDescriptor = new Float32Array(descriptor);
-      let bestMatch = { memberId: null, distance: 0.5 }; // 認証しきい値
+      
+      // ▼▼▼【修正点】照合ロジックを変更 ▼▼▼
+      let bestMatch = { memberId: null, distance: Infinity };
+      let secondBestMatch = { memberId: null, distance: Infinity };
 
       for (const doc of snapshot.docs) {
         const docData = doc.data();
@@ -518,33 +494,37 @@ exports.verifyFaceAPI = onRequest(runtimeOpts, async (req, res) => {
           const storedDescriptor = new Float32Array(docData.templateData);
           const distance = faceapi.euclideanDistance(queryDescriptor, storedDescriptor);
           if (distance < bestMatch.distance) {
+            secondBestMatch = bestMatch;
             bestMatch = { memberId: docData.memberId, distance: distance };
+          } else if (distance < secondBestMatch.distance) {
+            secondBestMatch = { memberId: docData.memberId, distance: distance };
           }
         }
       }
 
-      // 5. 最も一致した部員の情報を返す
-      if (bestMatch.memberId) {
-        const memberDoc = await db.collection("members").doc(bestMatch.memberId).get();
+      let finalMemberId = null;
+      if (bestMatch.distance < distanceThreshold) {
+        const ratioThreshold = 0.8;
+        if (secondBestMatch.distance === Infinity || (bestMatch.distance / secondBestMatch.distance) < ratioThreshold) {
+            finalMemberId = bestMatch.memberId;
+        } else {
+            console.log(`API認証拒否: 曖昧な一致です。 Best[${bestMatch.distance}] vs 2ndBest[${secondBestMatch.distance}]`);
+        }
+      }
+
+      if (finalMemberId) {
+        const memberDoc = await db.collection("members").doc(finalMemberId).get();
         if (memberDoc.exists) {
           const memberData = memberDoc.data();
-          // 失効している場合は認証失敗とする
           if (memberData.isExpired) {
             return res.status(200).json({ status: "fail", reason: "Member is expired." });
           }
-          return res.status(200).json({ 
+          return res.status(200).json({
             status: "success",
-            member: {
-              name: memberData.name,
-              grade: memberData.grade || "",
-              project: memberData.project || "",
-              status: memberData.status,
-            }
+            member: { name: memberData.name, grade: memberData.grade || "", project: memberData.project || "", status: memberData.status }
           });
         }
       }
-      
-      // 6. 一致する部員が見つからなかった場合
       return res.status(200).json({ status: "fail", reason: "No matching member found." });
 
     } catch (error) {

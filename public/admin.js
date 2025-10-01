@@ -24,7 +24,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     const errorMessage = document.getElementById('error-message');
     const retryButton = document.getElementById('retry-button');
 
-    // ▼▼▼【今回の修正点 1】変数を共通の親スコープに定義 ▼▼▼
     const exportableColumns = { '名前': 'name', 'フリガナ': 'furigana', '学籍番号': 'studentId', 'メールアドレス': 'email', 'DiscordユーザーID': 'discordId', '性別': 'gender', '年齢': 'age', '学年': 'grade', '類': 'category', '所属プロジェクト': 'project', '役職': 'roles', '割り当てキー': 'assignedKey', 'ステータス': 'status', '有効期限': 'expiryDate', '失効': 'isExpired' };
 
     // --- 状態管理用の変数 ---
@@ -42,6 +41,55 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     let pageStartMarkers = [null];
 
     // --- ここから関数定義 ---
+
+    // ▼▼▼【修正点 1】この関数を initMemberManagement の外に移動 ▼▼▼
+    async function findNextAvailableKey(extraUsedKeys = new Set()) {
+        const possibleKeys = 'abcdefghijklmnopqrstuvwxyz0123456789-^\\@[;:],./'.split('');
+        const q = query(membersCollection, where('isExpired', '!=', true));
+        const membersSnapshot = await getDocs(q);
+        const usedKeys = new Set(extraUsedKeys);
+        membersSnapshot.forEach(docSnap => {
+            if (docSnap.data().assignedKey) { usedKeys.add(docSnap.data().assignedKey); }
+        });
+        for (const key of possibleKeys) {
+            if (!usedKeys.has(key)) { return key; }
+        }
+        return null;
+    }
+    
+    function isGoodQuality(detection, videoElement) {
+        if (!detection) {
+            return { success: false, reason: "顔を検出できません..." };
+        }
+        const faceBox = detection.detection.box;
+        const landmarks = detection.landmarks;
+        const videoWidth = videoElement.clientWidth;
+        const videoHeight = videoElement.clientHeight;
+
+        if (videoWidth === 0 || videoHeight === 0) {
+            return { success: false, reason: "カメラサイズ取得エラー" };
+        }
+
+        const faceArea = faceBox.width * faceBox.height;
+        const videoArea = videoWidth * videoHeight;
+        if ((faceArea / videoArea) < 0.20) {
+            return { success: false, reason: "顔が小さすぎます。カメラに近づいてください。" };
+        }
+
+        const faceCenterX = faceBox.x + faceBox.width / 2;
+        const faceCenterY = faceBox.y + faceBox.height / 2;
+        const isHorizontallyCentered = faceCenterX > videoWidth * 0.25 && faceCenterX < videoWidth * 0.75;
+        const isVerticallyCentered = faceCenterY > videoHeight * 0.25 && faceCenterY < videoHeight * 0.75;
+        if (!isHorizontallyCentered || !isVerticallyCentered) {
+            return { success: false, reason: "顔が中央にありません。枠内に収めてください。" };
+        }
+
+        if (!landmarks.getLeftEye().length || !landmarks.getRightEye().length || !landmarks.getMouth().length) {
+            return { success: false, reason: "目や口が隠れています。前髪やマスクを外してください。" };
+        }
+        
+        return { success: true };
+    }
 
     function populateBiometricMemberSelect() {
         const biometricMemberSelect = document.getElementById('biometric-member-select');
@@ -122,14 +170,14 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     }
 
     // --- メインの実行ロジック ---
-    setupLoginForm(); // ★修正点: ログインボタンの機能を先に有効化
+    setupLoginForm();
     onAuthStateChanged(auth, user => {
         const loginContainer = document.querySelector('.container');
         if (user) {
             loginContainer.style.display = 'none';
             mainContent.style.display = 'block';
             hamburgerButton.style.display = 'flex';
-            initializePage(); // ログイン後にすべての管理機能を初期化
+            initializePage();
         } else {
             loginContainer.style.display = 'flex';
             mainContent.style.display = 'none';
@@ -148,7 +196,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             console.log("顔認識モデルの読み込みを開始します...");
             await Promise.all([
                 faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                 faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
             ]);
@@ -208,16 +255,14 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             if (apiKeyDisplay) apiKeyDisplay.value = settings.memberApiKey || 'APIキーが設定されていません';
             const faceVerifyApiKeyDisplay = document.getElementById('face-verify-api-key-display');
             if (faceVerifyApiKeyDisplay) faceVerifyApiKeyDisplay.value = settings.faceVerifyApiKey || 'APIキーが設定されていません';
-            //isDiscordFormDirty = false;
         } catch (error) {
             console.error("設定の読み込みに失敗:", error);
             document.querySelector('#main-content .container').style.display = 'none';
             errorMessage.textContent = '設定の読み込みに失敗しました。サーバーが起動中の可能性があります。';
             errorOverlay.style.display = 'block';
         } finally {
-        // ▼▼▼ 変更: finallyブロックで必ずフラグを戻す
-        isLoadingSettings = false;
-        isDiscordFormDirty = false; // ここで未保存フラグをリセット
+            isLoadingSettings = false;
+            isDiscordFormDirty = false;
         }
     }
 
@@ -237,7 +282,6 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             }
         });
 
-        discordSettingsForm.addEventListener('input', () => { isDiscordFormDirty = true; });
         discordSettingsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const saveButton = document.getElementById('save-discord-settings-button');
@@ -388,7 +432,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         });
     }
 
-function initFaceEnrollmentTab() {
+    function initFaceEnrollmentTab() {
         const startButton = document.getElementById('start-enrollment-button');
         startButton.addEventListener('click', async () => {
             const video = document.getElementById('video');
@@ -407,42 +451,49 @@ function initFaceEnrollmentTab() {
             try {
                 await loadModels();
 
-                // --- ここからが新しい実装 ---
-
-                const CAPTURE_COUNT = 3; // 撮影する枚数
-                const descriptors = [];    // 取得した特徴量データを保存する配列
-                
-                // ユーザーに撮影時のポーズを指示するためのテキスト
+                const CAPTURE_COUNT = 3;
+                const descriptors = [];
                 const prompts = [
                     "正面をまっすぐ向いてください...",
                     "次は、顔を少しだけ左に向けてください...",
                     "最後に、顔を少しだけ右に向けてください..."
                 ];
 
-                // 設定した回数だけループして顔を撮影する
                 for (let i = 0; i < CAPTURE_COUNT; i++) {
                     statusText.textContent = `${i + 1} / ${CAPTURE_COUNT} : ${prompts[i]}`;
                     
-                    // ユーザーがポーズをとるための短い待機時間
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-
-                    const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options())
-                                                  .withFaceLandmarks()
-                                                  .withFaceDescriptor();
-
-                    // 顔が検出できなかった場合は処理を中断する
-                    if (!detection) {
-                        statusText.textContent = `顔が検出できませんでした。もう一度最初からやり直してください。`;
-                        faceOverlay.classList.add('failure');
-                        return; // finallyブロックが実行される
+                    let successfulShot = false;
+                    for (let attempt = 0; attempt < 50; attempt++) {
+                        const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options())
+                                                      .withFaceLandmarks()
+                                                      .withFaceDescriptor();
+                        
+                        const qualityCheck = isGoodQuality(detection, video);
+                        
+                        if (qualityCheck.success) {
+                            descriptors.push(detection.descriptor);
+                            successfulShot = true;
+                            
+                            faceOverlay.classList.add('success');
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                            faceOverlay.classList.remove('success');
+                            
+                            break;
+                        } else {
+                            statusText.textContent = qualityCheck.reason;
+                        }
+                        
+                        await new Promise(resolve => setTimeout(resolve, 100));
                     }
 
-                    descriptors.push(detection.descriptor);
+                    if (!successfulShot) {
+                        statusText.textContent = `良い品質の顔が検出できませんでした。撮影環境を確認してください。`;
+                        faceOverlay.classList.add('failure');
+                        return;
+                    }
                 }
 
-                // --- 撮影した特徴量を平均化する処理 ---
                 statusText.textContent = '特徴を平均化しています...';
-                
                 const averageDescriptor = new Float32Array(128);
                 for (const descriptor of descriptors) {
                     for (let i = 0; i < descriptor.length; i++) {
@@ -453,8 +504,7 @@ function initFaceEnrollmentTab() {
                     averageDescriptor[i] /= CAPTURE_COUNT;
                 }
 
-                // --- 平均化したデータをサーバーに登録する ---
-                statusText.textContent = '顔を検出しました。サーバーに登録しています...';
+                statusText.textContent = 'サーバーに登録しています...';
                 faceOverlay.classList.add('success');
 
                 const templateData = Array.from(averageDescriptor);
@@ -464,7 +514,6 @@ function initFaceEnrollmentTab() {
                 alert(result.data.result);
                 statusText.textContent = "登録が完了しました。";
                 
-                // 完了後、トークン生成タブに戻る
                 document.getElementById('enroll-tab-button').click();
 
             } catch (error) {
@@ -475,23 +524,6 @@ function initFaceEnrollmentTab() {
                 startButton.disabled = false;
             }
         });
-    }
-
-    function stopAllBiometricProcesses() {
-        if (verificationInterval) {
-            clearInterval(verificationInterval);
-            verificationInterval = null;
-        }
-        const video = document.getElementById('video');
-        if (video && video.srcObject) {
-            video.srcObject.getTracks().forEach(track => track.stop());
-            video.srcObject = null;
-        }
-        const verifyVideoEl = document.getElementById('verify-video');
-        if (verifyVideoEl && verifyVideoEl.srcObject) {
-            verifyVideoEl.srcObject.getTracks().forEach(track => track.stop());
-            verifyVideoEl.srcObject = null;
-        }
     }
 
     function switchBiometricTab(activeTab, activePanel) {
@@ -574,7 +606,6 @@ function initFaceEnrollmentTab() {
         }, 2000);
     }
     
-    // --- APIキー管理機能 ---
     function initApiManagement() {
         const updateApiKeyButton = document.getElementById('update-api-key-button');
         const copyApiUrlButton = document.getElementById('copy-api-url-button');
@@ -626,9 +657,6 @@ function initFaceEnrollmentTab() {
             });
         }
     }
-
-    // --- ここから先の機能は、各initXXX関数にまとめられています ---
-    // (この下にあった部員管理、管理者管理などのロジックは、それぞれのinitXXX関数内にあります)
 
     function initMemberManagement() {
         const addMemberForm = document.getElementById('add-member-form');
@@ -1095,20 +1123,8 @@ function initFaceEnrollmentTab() {
             return null;
         }
 
-        async function findNextAvailableKey(extraUsedKeys = new Set()) {
-            const possibleKeys = 'abcdefghijklmnopqrstuvwxyz0123456789-^\\@[;:],./'.split('');
-            const q = query(membersCollection, where('isExpired', '!=', true));
-            const membersSnapshot = await getDocs(q);
-            const usedKeys = new Set(extraUsedKeys);
-            membersSnapshot.forEach(docSnap => {
-                if (docSnap.data().assignedKey) { usedKeys.add(docSnap.data().assignedKey); }
-            });
-            for (const key of possibleKeys) {
-                if (!usedKeys.has(key)) { return key; }
-            }
-            return null;
-        }
-    
+        // ▼▼▼【修正点 2】この関数定義を外に移動したため、ここからは削除 ▼▼▼
+
         function updateSelection() {
             const memberCheckboxes = document.querySelectorAll('.member-checkbox');
             const selectedCheckboxes = document.querySelectorAll('.member-checkbox:checked');
@@ -1218,8 +1234,6 @@ function initFaceEnrollmentTab() {
         const exportColumnSelectionDiv = document.getElementById('export-column-selection');
         const exportExcludeExpiredCheckbox = document.getElementById('export-exclude-expired');
         
-        // ▼▼▼【今回の修正点 2】ここにあった exportableColumns の定義を削除 ▼▼▼
-
         const templateHeaders = { '名前(必須)': 'name', 'フリガナ(必須)': 'furigana', '学籍番号(必須)': 'studentId', 'メールアドレス(必須)': 'email', 'DiscordユーザーID(必須)': 'discordId', '性別': 'gender', '年齢': 'age', '学年': 'grade', '類': 'category', '所属プロジェクト': 'project' };
 
         populateExportColumnSelection();
@@ -1371,7 +1385,6 @@ function initFaceEnrollmentTab() {
 
     function populateExportColumnSelection() {
         const exportColumnSelectionDiv = document.getElementById('export-column-selection');
-        // ▼▼▼【今回の修正点 3】ここにあった exportableColumns の定義を削除 ▼▼▼
         exportColumnSelectionDiv.innerHTML = '';
         for (const displayName in exportableColumns) {
             const key = exportableColumns[displayName];
@@ -1499,7 +1512,7 @@ function initFaceEnrollmentTab() {
     }
 
     async function loadAnalyticsData() {
-                analyticsDataLoaded = true;
+        analyticsDataLoaded = true;
         const durationChartContainer = document.getElementById('stay-duration-chart').parentElement;
         const entryChartContainer = document.getElementById('entry-count-chart').parentElement;
         durationChartContainer.innerHTML = '<p>データを集計中です...</p><canvas id="stay-duration-chart"></canvas>';

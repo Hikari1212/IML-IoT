@@ -1,5 +1,3 @@
-// kiosk.js の全内容をこのコードに置き換えてください
-
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc, getDocs, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
 export function initKioskPage(db) {
