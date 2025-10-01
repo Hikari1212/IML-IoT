@@ -147,6 +147,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         try {
             console.log("顔認識モデルの読み込みを開始します...");
             await Promise.all([
+                faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
                 faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                 faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
@@ -387,7 +388,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
         });
     }
 
-    function initFaceEnrollmentTab() {
+function initFaceEnrollmentTab() {
         const startButton = document.getElementById('start-enrollment-button');
         startButton.addEventListener('click', async () => {
             const video = document.getElementById('video');
@@ -399,25 +400,73 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 statusText.textContent = 'トークンを入力してください。';
                 return;
             }
-            statusText.textContent = '顔を検出しています...';
+            statusText.textContent = '準備しています...';
             faceOverlay.classList.remove('success', 'failure');
             startButton.disabled = true;
+
             try {
                 await loadModels();
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-                if (!detection) {
-                    statusText.textContent = '顔が検出できませんでした。もう一度試してください。';
-                    faceOverlay.classList.add('failure');
-                    return;
+
+                // --- ここからが新しい実装 ---
+
+                const CAPTURE_COUNT = 3; // 撮影する枚数
+                const descriptors = [];    // 取得した特徴量データを保存する配列
+                
+                // ユーザーに撮影時のポーズを指示するためのテキスト
+                const prompts = [
+                    "正面をまっすぐ向いてください...",
+                    "次は、顔を少しだけ左に向けてください...",
+                    "最後に、顔を少しだけ右に向けてください..."
+                ];
+
+                // 設定した回数だけループして顔を撮影する
+                for (let i = 0; i < CAPTURE_COUNT; i++) {
+                    statusText.textContent = `${i + 1} / ${CAPTURE_COUNT} : ${prompts[i]}`;
+                    
+                    // ユーザーがポーズをとるための短い待機時間
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+
+                    const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options())
+                                                  .withFaceLandmarks()
+                                                  .withFaceDescriptor();
+
+                    // 顔が検出できなかった場合は処理を中断する
+                    if (!detection) {
+                        statusText.textContent = `顔が検出できませんでした。もう一度最初からやり直してください。`;
+                        faceOverlay.classList.add('failure');
+                        return; // finallyブロックが実行される
+                    }
+
+                    descriptors.push(detection.descriptor);
                 }
+
+                // --- 撮影した特徴量を平均化する処理 ---
+                statusText.textContent = '特徴を平均化しています...';
+                
+                const averageDescriptor = new Float32Array(128);
+                for (const descriptor of descriptors) {
+                    for (let i = 0; i < descriptor.length; i++) {
+                        averageDescriptor[i] += descriptor[i];
+                    }
+                }
+                for (let i = 0; i < averageDescriptor.length; i++) {
+                    averageDescriptor[i] /= CAPTURE_COUNT;
+                }
+
+                // --- 平均化したデータをサーバーに登録する ---
                 statusText.textContent = '顔を検出しました。サーバーに登録しています...';
                 faceOverlay.classList.add('success');
-                const templateData = Array.from(detection.descriptor);
+
+                const templateData = Array.from(averageDescriptor);
                 const registerBiometric = httpsCallable(functions, 'registerBiometric');
                 const result = await registerBiometric({ token, templateData });
+                
                 alert(result.data.result);
                 statusText.textContent = "登録が完了しました。";
+                
+                // 完了後、トークン生成タブに戻る
                 document.getElementById('enroll-tab-button').click();
+
             } catch (error) {
                 console.error("登録エラー:", error);
                 statusText.textContent = `エラー: ${error.message}`;
@@ -496,7 +545,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
                 if(verificationInterval) clearInterval(verificationInterval);
                 return;
             }
-            const detection = await faceapi.detectSingleFace(verifyVideo, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+            const detection = await faceapi.detectSingleFace(verifyVideo, new faceapi.SsdMobilenetv1Options()).withFaceLandmarks().withFaceDescriptor();
             if (detection) {
                 verifyStatus.textContent = '顔を検出、サーバーで照合中...';
                 const templateData = Array.from(detection.descriptor);
