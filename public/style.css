@@ -1234,3 +1234,103 @@ body:has(#kiosk-panel) {
     /* 在室中タイルと描画方法を揃えるため、透明な影を追加 */
     box-shadow: 0 2px 5px rgba(0,0,0,0.0);
 }
+
+/* キオスク画面のヘッダー */
+.kiosk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.kiosk-header h1 {
+    margin: 0;
+}
+
+/* 顔登録画面のボタン配置 */
+.enrollment-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* --- キオスク顔登録画面のフルスクリーンUI改善 --- */
+
+/* ページ全体で余白をなくし、高さを100%に設定 */
+html, body:has(#enrollment-panel) {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* 登録パネルを画面全体に広げ、Flexboxの親コンテナにする */
+#enrollment-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 10px;   /* パディングを小さく */
+    box-sizing: border-box;
+}
+
+/* タイトルと説明文が余分なスペースを取らないように設定 */
+#enrollment-panel > h2,
+#enrollment-panel > p {
+    flex-shrink: 0;
+    text-align: center;
+    margin: 0;
+}
+#enrollment-panel > h2 { 
+    margin-bottom: 8px;
+    font-size: 1.5em;
+}
+#enrollment-panel > p { 
+    margin-bottom: 15px;
+    font-size: 0.95em;
+}
+
+
+/* カメラと操作パネルのコンテナを、残りのスペースすべてを埋めるように設定 */
+.enrollment-container {
+    display: flex;
+    flex-grow: 1;
+    gap: 20px;
+    min-height: 0;
+    align-items: stretch;
+}
+/* カメラコンテナと操作パネルを左右に配置し、幅の比率を指定 */
+.camera-container {
+    flex: 1;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 0;
+    max-width: 600px;
+}
+
+.enrollment-controls {
+    flex: 0 0 auto;   /* 固定幅を解除 */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+
+/* ビデオ映像がコンテナに収まるように調整 */
+#video {
+    width: 100%;
+    height: 100%;
+    max-height: 60vh;  /* 画面の6割まで */
+    object-fit: contain;
+    border-radius: 8px;
+    background-color: #000;
+}
+
+/* --- スマートフォンでの表示を縦並びに調整 --- */
+@media (max-width: 768px) {
+    .enrollment-container {
+        flex-direction: column; /* 縦並びに変更 */
+    }
+}

@@ -10,6 +10,7 @@ export function initEnrollmentPage(db, functions) {
     const tokenInput = document.getElementById('enrollment-token');
     const statusText = document.getElementById('enrollment-status');
     const faceOverlay = document.getElementById('face-overlay');
+    const backToKioskButton = document.getElementById('back-to-kiosk-button');
     
     let modelsLoaded = false;
     
@@ -56,6 +57,14 @@ export function initEnrollmentPage(db, functions) {
     // 登録画面のイベントリスナー
     enrollmentPanel.addEventListener('mousemove', resetInactivityTimer);
     enrollmentPanel.addEventListener('keypress', resetInactivityTimer);
+
+    // 戻るボタンのクリックイベント
+    if (backToKioskButton) {
+        backToKioskButton.addEventListener('click', () => {
+            clearTimeout(inactivityTimer); // タイマーをクリア
+            showKioskPanel();
+        });
+    }
 
     // 外部からカメラ起動のイベントを受け取る
     document.addEventListener('start-camera', startCamera);

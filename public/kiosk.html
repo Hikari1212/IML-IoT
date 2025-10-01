@@ -9,7 +9,10 @@
 </head>
 <body>
     <div id="kiosk-panel" class="panel">
-        <h1>入退室管理</h1>
+        <div class="kiosk-header">
+            <h1>入退室管理</h1>
+            <button id="start-face-enrollment-flow-button" class="btn btn-secondary">顔情報を登録する</button>
+        </div>
         <div id="member-list">
             </div>
         <p style="text-align: center; margin-top: 20px;">
@@ -22,7 +25,7 @@
         <p>管理者から発行されたトークンを入力し、「登録開始」ボタンを押してください。<br>カメラに顔をまっすぐ向けて、枠内に収まるようにしてください。</p>
         <div class="enrollment-container">
             <div class="camera-container">
-                <video id="video" width="600" height="450" autoplay muted></video>
+                <video id="video" autoplay muted></video>
                 <div id="face-overlay"></div>
             </div>
             <div class="enrollment-controls">
@@ -30,12 +33,15 @@
                     <label for="enrollment-token">登録トークン</label>
                     <input type="text" id="enrollment-token" placeholder="管理者から受け取ったトークン">
                 </div>
-                <button id="start-enrollment-button">登録開始</button>
+                <div class="enrollment-actions">
+                    <button id="start-enrollment-button" class="btn btn-primary">登録開始</button>
+                    <button id="back-to-kiosk-button" class="btn btn-secondary">入退室登録に戻る</button>
+                </div>
                 <p id="enrollment-status">準備完了</p>
             </div>
         </div>
     </div>
-
+    
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
         import { getFirestore } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
@@ -75,9 +81,5 @@
             }
         });
     </script>
-    
-    <a href="#" id="go-to-enrollment-button" title="顔情報を登録する">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3.5 3.5 0 0 0-3.5 3.5v.042A6.47 6.47 0 0 0 6.5 12c0 2.54.966 4.86 2.5 6.458V22h6v-3.542c1.534-1.598 2.5-3.918 2.5-6.458a6.47 6.47 0 0 0-2-4.458V5.5A3.5 3.5 0 0 0 12 2z"></path></svg>
-    </a>
 </body>
 </html>

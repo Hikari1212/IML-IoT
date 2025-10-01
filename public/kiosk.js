@@ -7,7 +7,7 @@ export function initKioskPage(db) {
     const membersCollection = collection(db, 'members');
     const logsCollection = collection(db, 'activity_logs');
     const memberListDiv = document.getElementById('member-list');
-    const goToEnrollmentButton = document.getElementById('go-to-enrollment-button');
+    const startFaceEnrollmentButton = document.getElementById('start-face-enrollment-flow-button');
 
     // --- 状態管理用の変数 ---
     const processingActions = new Set();
@@ -124,8 +124,8 @@ export function initKioskPage(db) {
     });
 
     // 顔登録ボタンのイベントリスナー
-    if (goToEnrollmentButton) {
-        goToEnrollmentButton.addEventListener('click', (e) => {
+    if (startFaceEnrollmentButton) {
+        startFaceEnrollmentButton.addEventListener('click', (e) => {
             e.preventDefault();
             showEnrollmentPanel();
         });
