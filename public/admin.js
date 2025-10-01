@@ -33,6 +33,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
     let verificationInterval = null;
     let modelsLoaded = false;
     let isDiscordFormDirty = false;
+    let isLoadingSettings = false;
     let discordRules = [];
     let analyticsDataLoaded = false;
     let stayDurationChart = null;
@@ -190,6 +191,7 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
 
     async function loadSettings() {
         errorOverlay.style.display = 'none';
+        isLoadingSettings = true;
         try {
             const getSettings = httpsCallable(functions, 'getSettings');
             const result = await getSettings();
@@ -205,12 +207,16 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             if (apiKeyDisplay) apiKeyDisplay.value = settings.memberApiKey || 'APIキーが設定されていません';
             const faceVerifyApiKeyDisplay = document.getElementById('face-verify-api-key-display');
             if (faceVerifyApiKeyDisplay) faceVerifyApiKeyDisplay.value = settings.faceVerifyApiKey || 'APIキーが設定されていません';
-            isDiscordFormDirty = false;
+            //isDiscordFormDirty = false;
         } catch (error) {
             console.error("設定の読み込みに失敗:", error);
             document.querySelector('#main-content .container').style.display = 'none';
             errorMessage.textContent = '設定の読み込みに失敗しました。サーバーが起動中の可能性があります。';
             errorOverlay.style.display = 'block';
+        } finally {
+        // ▼▼▼ 変更: finallyブロックで必ずフラグを戻す
+        isLoadingSettings = false;
+        isDiscordFormDirty = false; // ここで未保存フラグをリセット
         }
     }
 
@@ -223,6 +229,13 @@ export function initAdminPage(auth, db, functions, XLSX, Chart) {
             renderDiscordRules();
             isDiscordFormDirty = true;
         });
+
+        discordSettingsForm.addEventListener('input', () => {
+            if (!isLoadingSettings) {
+                isDiscordFormDirty = true;
+            }
+        });
+
         discordSettingsForm.addEventListener('input', () => { isDiscordFormDirty = true; });
         discordSettingsForm.addEventListener('submit', async (e) => {
             e.preventDefault();

@@ -1258,7 +1258,8 @@ body:has(#kiosk-panel) {
 /* --- キオスク顔登録画面のフルスクリーンUI改善 --- */
 
 /* ページ全体で余白をなくし、高さを100%に設定 */
-html, body:has(#enrollment-panel) {
+/* ▼▼▼【修正点】セレクタを html と body:has(...) から、両方に :has(...) を適用するように変更 ▼▼▼ */
+html:has(#enrollment-panel), body:has(#enrollment-panel) {
     height: 100%;
     margin: 0;
     padding: 0;
