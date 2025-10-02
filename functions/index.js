@@ -342,12 +342,15 @@ exports.generateEnrollmentToken = onCall(runtimeOpts, async (request) => {
 });
 
 exports.registerBiometric = onCall(runtimeOpts, async (request) => {
-  const {token, templateData} = request.data;
-  if (!token || !templateData) {
-    throw new HttpsError("invalid-argument", "トークンとテンプレートデータが必要です。");
+  // "templateData" から "templates" に変更し、配列であることをチェック
+  const {token, templates} = request.data;
+  if (!token || !templates || !Array.isArray(templates)) {
+    throw new HttpsError("invalid-argument", "トークンとテンプレートデータの配列が必要です。");
   }
+
   const tokenRef = db.collection("enrollment_tokens").doc(token);
   const tokenDoc = await tokenRef.get();
+
   if (!tokenDoc.exists) {
     throw new HttpsError("not-found", "無効なトークンです。");
   }
@@ -356,13 +359,33 @@ exports.registerBiometric = onCall(runtimeOpts, async (request) => {
     await tokenRef.delete();
     throw new HttpsError("deadline-exceeded", "トークンの有効期限が切れています。");
   }
-  await db.collection("biometrics").add({
-    memberId: tokenData.memberId,
-    type: tokenData.type,
-    templateData: templateData,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+
+  // 既存の同タイプの生体情報を一度すべて削除
+  const existingSnapshot = await db.collection("biometrics")
+      .where("memberId", "==", tokenData.memberId)
+      .where("type", "==", tokenData.type)
+      .get();
+
+  const batch = db.batch();
+  if (!existingSnapshot.empty) {
+    console.log(`既存の ${tokenData.type} 情報を削除します。`);
+    existingSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+  }
+
+  // 新しい特徴量データをループして、それぞれ個別のドキュメントとして追加
+  templates.forEach(templateData => {
+    const newDocRef = db.collection("biometrics").doc();
+    batch.set(newDocRef, {
+      memberId: tokenData.memberId,
+      type: tokenData.type,
+      templateData: templateData,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   });
-  await tokenRef.delete();
+
+  batch.delete(tokenRef); // 使用済みトークンを削除
+
+  await batch.commit();
   return {result: `${tokenData.type} の登録が成功しました。`};
 });
 
@@ -395,6 +418,7 @@ exports.deleteBiometric = onCall(runtimeOpts, async (request) => {
 });
 
 
+// 管理者向けの顔識別関数
 exports.identifyMemberByFace = onCall(runtimeOpts, async (request) => {
   await initializationPromise;
 
@@ -414,30 +438,42 @@ exports.identifyMemberByFace = onCall(runtimeOpts, async (request) => {
   
   const settings = await getSettings();
   const distanceThreshold = settings.faceRecognitionThreshold || 0.5;
-
   const queryDescriptor = new Float32Array(descriptor);
 
-  // ▼▼▼【修正点】照合ロジックを変更 ▼▼▼
-  let bestMatch = {memberId: null, distance: Infinity};
-  let secondBestMatch = {memberId: null, distance: Infinity};
+  // メンバーごとの最も良い（小さい）距離を保持するためのMap
+  const memberDistances = new Map();
 
+  // 1. 全ての顔データをループし、メンバーごとに最小距離を記録する
   for (const doc of snapshot.docs) {
     const docData = doc.data();
     if (docData.templateData && Array.isArray(docData.templateData)) {
       const storedDescriptor = new Float32Array(docData.templateData);
       const distance = faceapi.euclideanDistance(queryDescriptor, storedDescriptor);
-      if (distance < bestMatch.distance) {
-        secondBestMatch = bestMatch;
-        bestMatch = {memberId: docData.memberId, distance: distance};
-      } else if (distance < secondBestMatch.distance) {
-        secondBestMatch = {memberId: docData.memberId, distance: distance};
+
+      // Mapに記録されている距離より小さい場合、更新する
+      if (!memberDistances.has(docData.memberId) || distance < memberDistances.get(docData.memberId)) {
+        memberDistances.set(docData.memberId, distance);
       }
     }
   }
 
+  // 2. Mapから、全メンバーの中でのベストマッチとセカンドベストマッチを探す
+  let bestMatch = {memberId: null, distance: Infinity};
+  let secondBestMatch = {memberId: null, distance: Infinity};
+  
+  for (const [memberId, distance] of memberDistances.entries()) {
+      if (distance < bestMatch.distance) {
+        secondBestMatch = bestMatch;
+        bestMatch = {memberId, distance};
+      } else if (distance < secondBestMatch.distance) {
+        secondBestMatch = {memberId, distance};
+      }
+  }
+
+  // 3. 最終的な本人判定を行う
   let finalMemberId = null;
   if (bestMatch.distance < distanceThreshold) {
-    const ratioThreshold = 0.8; 
+    const ratioThreshold = 0.7; 
     if (secondBestMatch.distance === Infinity || (bestMatch.distance / secondBestMatch.distance) < ratioThreshold) {
         finalMemberId = bestMatch.memberId;
     } else {
@@ -457,7 +493,8 @@ exports.identifyMemberByFace = onCall(runtimeOpts, async (request) => {
   return null;
 });
 
-// --- 顔認証API ---
+
+// 外部API向けの顔認証関数
 exports.verifyFaceAPI = onRequest(runtimeOpts, async (req, res) => {
   const cors = require("cors")({ origin: true });
   cors(req, res, async () => {
@@ -484,21 +521,29 @@ exports.verifyFaceAPI = onRequest(runtimeOpts, async (req, res) => {
       const distanceThreshold = settings.faceRecognitionThreshold || 0.5;
       const queryDescriptor = new Float32Array(descriptor);
       
-      // ▼▼▼【修正点】照合ロジックを変更 ▼▼▼
-      let bestMatch = { memberId: null, distance: Infinity };
-      let secondBestMatch = { memberId: null, distance: Infinity };
+      const memberDistances = new Map();
 
       for (const doc of snapshot.docs) {
         const docData = doc.data();
         if (docData.templateData && Array.isArray(docData.templateData)) {
           const storedDescriptor = new Float32Array(docData.templateData);
           const distance = faceapi.euclideanDistance(queryDescriptor, storedDescriptor);
-          if (distance < bestMatch.distance) {
-            secondBestMatch = bestMatch;
-            bestMatch = { memberId: docData.memberId, distance: distance };
-          } else if (distance < secondBestMatch.distance) {
-            secondBestMatch = { memberId: docData.memberId, distance: distance };
+
+          if (!memberDistances.has(docData.memberId) || distance < memberDistances.get(docData.memberId)) {
+            memberDistances.set(docData.memberId, distance);
           }
+        }
+      }
+
+      let bestMatch = { memberId: null, distance: Infinity };
+      let secondBestMatch = { memberId: null, distance: Infinity };
+      
+      for (const [memberId, distance] of memberDistances.entries()) {
+        if (distance < bestMatch.distance) {
+          secondBestMatch = bestMatch;
+          bestMatch = { memberId, distance };
+        } else if (distance < secondBestMatch.distance) {
+          secondBestMatch = { memberId, distance };
         }
       }
 
@@ -508,7 +553,7 @@ exports.verifyFaceAPI = onRequest(runtimeOpts, async (req, res) => {
         if (secondBestMatch.distance === Infinity || (bestMatch.distance / secondBestMatch.distance) < ratioThreshold) {
             finalMemberId = bestMatch.memberId;
         } else {
-            console.log(`API認証拒否: 曖昧な一致です。 Best[${bestMatch.distance}] vs 2ndBest[${secondBestMatch.distance}]`);
+            console.log(`API認証拒否: 曖昧な一致です。 Best[${bestMatch.distance.toFixed(4)}] vs 2ndBest[${secondBestMatch.distance.toFixed(4)}]`);
         }
       }
 

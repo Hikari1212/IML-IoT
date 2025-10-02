@@ -10,6 +10,7 @@ export function initEnrollmentPage(db, functions) {
     const tokenInput = document.getElementById('enrollment-token');
     const statusText = document.getElementById('enrollment-status');
     const faceOverlay = document.getElementById('face-overlay');
+    const instructionOverlay = document.getElementById('face-instruction-overlay');
     const backToKioskButton = document.getElementById('back-to-kiosk-button');
     
     let modelsLoaded = false;
@@ -63,7 +64,7 @@ export function initEnrollmentPage(db, functions) {
 
     document.addEventListener('start-camera', startCamera);
 
-    // ▼▼▼【修正点 1】品質チェック関数が理由を返すように変更 ▼▼▼
+    // ▼▼▼【修正点1】品質チェックに明るさ判定を追加 ▼▼▼
     function isGoodQuality(detection, videoElement) {
         if (!detection) {
             return { success: false, reason: "顔を検出できません..." };
@@ -95,9 +96,35 @@ export function initEnrollmentPage(db, functions) {
             return { success: false, reason: "目や口が隠れています。前髪やマスクを外してください。" };
         }
         
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoWidth;
+            canvas.height = videoHeight;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(videoElement, 0, 0, videoWidth, videoHeight);
+            const imageData = ctx.getImageData(0, 0, videoWidth, videoHeight).data;
+            
+            let totalBrightness = 0;
+            for (let i = 0; i < imageData.length; i += 4) {
+                const brightness = (imageData[i] + imageData[i + 1] + imageData[i + 2]) / 3;
+                totalBrightness += brightness;
+            }
+            const avgBrightness = totalBrightness / (imageData.length / 4);
+
+            if (avgBrightness < 50) {
+                return { success: false, reason: "暗すぎます。明るい場所で試してください。" };
+            }
+            if (avgBrightness > 200) {
+                return { success: false, reason: "明るすぎます。逆光を避けてください。" };
+            }
+        } catch (e) {
+            console.warn("明るさのチェックに失敗:", e);
+        }
+        
         return { success: true };
     }
 
+    // ▼▼▼【修正点2】顔登録処理に指示表示を追加 ▼▼▼
     startButton.addEventListener('click', async () => {
         const token = tokenInput.value;
         if (!token) {
@@ -107,26 +134,29 @@ export function initEnrollmentPage(db, functions) {
 
         faceOverlay.classList.remove('success', 'failure');
         startButton.disabled = true;
+        instructionOverlay.textContent = '';
+        instructionOverlay.classList.remove('visible');
 
         try {
             const CAPTURE_COUNT = 3;
             const descriptors = [];
             const prompts = [
-                "正面をまっすぐ向いてください...",
-                "次は、顔を少しだけ左に向けてください...",
-                "最後に、顔を少しだけ右に向けてください..."
+                "正面をまっすぐ向いてください",
+                "顔を少しだけ左に向けてください",
+                "最後に、顔を右に向けてください"
             ];
 
             for (let i = 0; i < CAPTURE_COUNT; i++) {
-                statusText.textContent = `${i + 1} / ${CAPTURE_COUNT} : ${prompts[i]}`;
+                instructionOverlay.textContent = prompts[i];
+                instructionOverlay.classList.add('visible');
+                statusText.textContent = `(${i + 1}/${CAPTURE_COUNT}) 準備中...`;
                 
                 let successfulShot = false;
-                for (let attempt = 0; attempt < 50; attempt++) {
+                for (let attempt = 0; attempt < 100; attempt++) {
                     const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options())
-                                                  .withFaceLandmarks()
-                                                  .withFaceDescriptor();
+                                                .withFaceLandmarks()
+                                                .withFaceDescriptor();
                     
-                    // ▼▼▼【修正点 2】品質チェックの結果を画面に表示 ▼▼▼
                     const qualityCheck = isGoodQuality(detection, video);
                     
                     if (qualityCheck.success) {
@@ -139,37 +169,34 @@ export function initEnrollmentPage(db, functions) {
                         
                         break;
                     } else {
-                        // 失敗理由をリアルタイムで表示
-                        statusText.textContent = qualityCheck.reason;
+                        statusText.textContent = `(${i + 1}/${CAPTURE_COUNT}) ${qualityCheck.reason}`;
                     }
                     
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
 
+                instructionOverlay.classList.remove('visible');
+
                 if (!successfulShot) {
                     statusText.textContent = `良い品質の顔が検出できませんでした。撮影環境を確認してください。`;
                     faceOverlay.classList.add('failure');
+                    startButton.disabled = false;
                     return;
                 }
-            }
 
-            statusText.textContent = '特徴を平均化しています...';
-            const averageDescriptor = new Float32Array(128);
-            for (const descriptor of descriptors) {
-                for (let i = 0; i < descriptor.length; i++) {
-                    averageDescriptor[i] += descriptor[i];
+                // ▼▼▼【ここに追加】撮影成功後に1.5秒のポーズを入れる ▼▼▼
+                if (i < CAPTURE_COUNT - 1) { // 最後の撮影後はポーズしない
+                    statusText.textContent = `OK! 次の準備をします...`;
+                    await new Promise(resolve => setTimeout(resolve, 1500));
                 }
-            }
-            for (let i = 0; i < averageDescriptor.length; i++) {
-                averageDescriptor[i] /= CAPTURE_COUNT;
             }
 
             statusText.textContent = 'サーバーに登録しています...';
             faceOverlay.classList.add('success');
 
-            const templateData = Array.from(averageDescriptor);
+            const templates = descriptors.map(d => Array.from(d));
             const registerBiometric = httpsCallable(functions, 'registerBiometric');
-            const result = await registerBiometric({ token, templateData });
+            const result = await registerBiometric({ token, templates });
             
             statusText.textContent = result.data.result;
             clearTimeout(inactivityTimer);
@@ -181,6 +208,7 @@ export function initEnrollmentPage(db, functions) {
             faceOverlay.classList.add('failure');
         } finally {
             startButton.disabled = false;
+            instructionOverlay.classList.remove('visible');
         }
     });
 }
