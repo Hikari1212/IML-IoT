@@ -28,6 +28,8 @@ service cloud.firestore {
     match /activity_logs/{logId} {
       // 管理者は読み取りを許可
       allow read: if isAdmin();
+       // キオスク端末が一覧を読み取ることを許可 (認証なし)
+      allow list: if request.auth == null;
       // キオスク端末からのログ作成を許可 (認証なし)
       allow create: if request.auth == null;
     }

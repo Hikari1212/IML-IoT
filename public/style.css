@@ -1366,3 +1366,35 @@ html:has(#enrollment-panel), body:has(#enrollment-panel) {
 .face-instruction-overlay.visible {
     opacity: 1;
 }
+
+/* キオスク画面のヘッダー */
+.kiosk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.kiosk-header h1 {
+    margin: 0;
+}
+
+#daily-visitor-count {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #333;
+    /* h1とボタンの間に配置されるように調整 */
+    margin-right: auto;
+    margin-left: 20px;
+    white-space: nowrap; /* 折り返さない */
+}
+
+/* 顔登録画面のボタン配置 */
+.enrollment-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}

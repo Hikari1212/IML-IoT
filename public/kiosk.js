@@ -1,4 +1,41 @@
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc, getDocs, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+import { collection, query, where, onSnapshot, orderBy, doc, getDoc, getDocs, updateDoc, addDoc, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+
+/**
+ * 本日の来室者数をリアルタイムで監視・表示する関数
+ * @param {Firestore} db - Firestoreインスタンス
+ */
+function listenForDailyVisitors(db) {
+    const logsCollection = collection(db, 'activity_logs');
+    const visitorCountElement = document.getElementById('daily-visitor-count');
+    if (!visitorCountElement) return;
+
+    // 今日の日付の開始と終了を取得
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+    // 今日の日付範囲で、actionが'in'のログを監視するクエリ
+    const q = query(logsCollection, 
+        where('timestamp', '>=', Timestamp.fromDate(startOfDay)),
+        where('timestamp', '<=', Timestamp.fromDate(endOfDay)),
+        where('action', '==', 'in')
+    );
+
+    onSnapshot(q, (snapshot) => {
+        const uniqueVisitors = new Set();
+        snapshot.forEach(doc => {
+            // memberNameをSetに追加して重複を除外
+            if(doc.data().memberName) {
+                uniqueVisitors.add(doc.data().memberName);
+            }
+        });
+        // Setのサイズ（ユニークな来室者数）を表示
+        visitorCountElement.textContent = `本日の来室者: ${uniqueVisitors.size}人`;
+    }, (error) => {
+        console.error("来室者数の取得に失敗:", error);
+        visitorCountElement.textContent = '来室者数: 取得エラー';
+    });
+}
 
 export function initKioskPage(db) {
     // --- DOM要素と定数の定義 ---
@@ -61,6 +98,10 @@ export function initKioskPage(db) {
     }
 
     // --- イベントリスナーとデータ監視のセットアップ ---
+
+    // ▼▼▼ ここに追加 ▼▼▼
+    listenForDailyVisitors(db);
+    // ▲▲▲ ここまで ▲▲▲
 
     // Firestoreのデータ変更を監視
     const q = query(membersCollection, orderBy('name'));
